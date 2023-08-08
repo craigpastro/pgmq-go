@@ -1,0 +1,15 @@
+run:
+  timeout: 3m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errname
+    - gofmt
+    - goimports
+    - stylecheck
+    - unconvert
+    - unparam
+
+issues:
+  fix: true
