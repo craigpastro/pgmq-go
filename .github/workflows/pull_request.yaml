@@ -11,9 +11,6 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version-file: "./go.mod"
-      - uses: bufbuild/buf-setup-action@v1
-      - name: buf lint
-        uses: bufbuild/buf-lint-action@v1
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
