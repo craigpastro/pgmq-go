@@ -18,41 +18,41 @@ Then
 package main
 
 import (
-	"context"
-	"fmt"
+    "context"
+    "fmt"
 
-	"github.com/craigpastro/pgmq-go"
+    "github.com/craigpastro/pgmq-go"
 )
 
 func main() {
 	q, err := pgmq.New("postgres://postgres:password@localhost:5432/postgres")
-	if err != nil {
+    if err != nil {
         panic(err)
-	}
+    }
 
-	ctx := context.Background()
+    ctx := context.Background()
 
-	err = q.CreateQueue(ctx, "my_queue")
-	if err != nil {
+    err = q.CreateQueue(ctx, "my_queue")
+    if err != nil {
         panic(err)
-	}
+    }
 
-	id, err := q.Send(ctx, "my_queue", map[string]any{"foo": "bar"})
-	if err != nil {
+    id, err := q.Send(ctx, "my_queue", map[string]any{"foo": "bar"})
+    if err != nil {
         panic(err)
-	}
+    }
 
-	msg, err := q.Read(ctx, "my_queue", 30)
-	if err != nil {
+    msg, err := q.Read(ctx, "my_queue", 30)
+    if err != nil {
         panic(err)
-	}
+    }
 
-	// Archive the message by moving it to the "pgmq_<queue_name>_archive" table.
-	// Alternatively, you can `Delete` the message, or read and delete in one
-	// call by using `Pop`.
-	_, err = q.Archive(ctx, "my_queue", id)
-	if err != nil {
+    // Archive the message by moving it to the "pgmq_<queue_name>_archive" table.
+    // Alternatively, you can `Delete` the message, or read and delete in one
+    // call by using `Pop`.
+    _, err = q.Archive(ctx, "my_queue", id)
+    if err != nil {
         panic(err)
-	}
+    }
 }
 ```
