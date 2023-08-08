@@ -1,7 +1,10 @@
-name: Pull Request
+name: CI
 
 on:
   pull_request:
+  push:
+    branches:    
+      - main
 
 jobs:
   lint:
@@ -23,4 +26,8 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version-file: "./go.mod"
-      - run: go test -race
+      - run: go test -race -coverprofile=coverage.out -covermode=atomic
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
