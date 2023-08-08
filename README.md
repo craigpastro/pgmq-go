@@ -27,24 +27,24 @@ import (
 func main() {
 	q, err := pgmq.New("postgres://postgres:password@localhost:5432/postgres")
 	if err != nil {
-		// handle error
+        panic(err)
 	}
 
 	ctx := context.Background()
 
 	err = q.CreateQueue(ctx, "my_queue")
 	if err != nil {
-		// handle error
+        panic(err)
 	}
 
 	id, err := q.Send(ctx, "my_queue", map[string]any{"foo": "bar"})
 	if err != nil {
-		// handle error
+        panic(err)
 	}
 
 	msg, err := q.Read(ctx, "my_queue", 30)
 	if err != nil {
-		// handle error
+        panic(err)
 	}
 
 	// Archive the message by moving it to the "pgmq_<queue_name>_archive" table.
@@ -52,7 +52,7 @@ func main() {
 	// call by using `Pop`.
 	_, err = q.Archive(ctx, "my_queue", id)
 	if err != nil {
-		// handle error
+        panic(err)
 	}
 }
 ```
