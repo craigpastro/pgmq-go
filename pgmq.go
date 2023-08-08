@@ -20,7 +20,8 @@ type Message struct {
 	MsgID      int64     `json:"msg_id"`
 	ReadCount  int64     `json:"read_ct"`
 	EnqueuedAt time.Time `json:"enqueued_at"`
-	/// VT is "visibility time". The UTC timestamp at which the message will be available for reading again.
+	// VT is "visibility time". The UTC timestamp at which the message will
+	// be available for reading again.
 	VT      time.Time      `json:"vt"`
 	Message map[string]any `json:"message"`
 }
@@ -29,6 +30,8 @@ type PGMQ struct {
 	pool *pgxpool.Pool
 }
 
+// New establishes a connection to Postgres given by the connString, then
+// creates the pgmq extension if it does not already exist.
 func New(connString string) (*PGMQ, error) {
 	cfg, err := pgxpool.ParseConfig(connString)
 	if err != nil {
@@ -61,6 +64,7 @@ func New(connString string) (*PGMQ, error) {
 	}, nil
 }
 
+// MustNew is similar to New, but panics if it encounters an error.
 func MustNew(connString string) *PGMQ {
 	pgmq, err := New(connString)
 	if err != nil {

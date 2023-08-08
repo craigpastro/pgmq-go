@@ -1,5 +1,10 @@
 # pgmq-go
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/craigpastro/pgmq-go.svg)](https://pkg.go.dev/github.com/craigpastro/pgmq-go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/craigpastro/pgmq-go)](https://goreportcard.com/report/github.com/craigpastro/pgmq-go)
+[![CI](https://github.com/craigpastro/pgmq-go/actions/workflows/ci.yaml/badge.svg)](https://github.com/craigpastro/pgmq-go/actions/workflows/ci.yaml)
+[![codecov](https://codecov.io/github/craigpastro/pgmq-go/branch/main/graph/badge.svg?token=00AJODX77Z)](https://codecov.io/github/craigpastro/pgmq-go)
+
 A Go (Golang) client for
 [Postgres Message Queue](https://github.com/tembo-io/pgmq) (PGMQ). Based on the
 [Rust client](https://github.com/tembo-io/pgmq/tree/main/core).
