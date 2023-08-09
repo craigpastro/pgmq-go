@@ -17,13 +17,13 @@ const vtDefault = 30
 var ErrNoRows = errors.New("pgmq: no rows in result set")
 
 type Message struct {
-	MsgID      int64     `json:"msg_id"`
-	ReadCount  int64     `json:"read_ct"`
-	EnqueuedAt time.Time `json:"enqueued_at"`
+	MsgID      int64
+	ReadCount  int64
+	EnqueuedAt time.Time
 	// VT is "visibility time". The UTC timestamp at which the message will
 	// be available for reading again.
-	VT      time.Time      `json:"vt"`
-	Message map[string]any `json:"message"`
+	VT      time.Time
+	Message map[string]any
 }
 
 type PGMQ struct {
@@ -45,7 +45,7 @@ func New(connString string) (*PGMQ, error) {
 
 	err = retrier.Do(func() error {
 		if err = pool.Ping(context.Background()); err != nil {
-			log.Print("waiting for Postgres")
+			log.Println("waiting for Postgres")
 			return err
 		}
 		return nil
@@ -185,24 +185,36 @@ func (p *PGMQ) Pop(ctx context.Context, queue string) (*Message, error) {
 // SELECT * FROM pgmq_<queue_name>_archive;
 // ```
 func (p *PGMQ) Archive(ctx context.Context, queue string, msgID int64) (int64, error) {
-	tag, err := p.pool.Exec(ctx, "select pgmq_archive($1, $2)", queue, msgID)
+	var archived bool
+	err := p.pool.QueryRow(ctx, "select pgmq_archive($1, $2)", queue, msgID).Scan(&archived)
 	if err != nil {
 		return 0, wrapPostgresError(err)
 	}
 
-	return tag.RowsAffected(), nil
+	var rowsAffected int64 = 0
+	if archived {
+		rowsAffected = 1
+	}
+
+	return rowsAffected, nil
 }
 
 // Delete deletes a message from the queue by its id. This is a permanent
 // delete and cannot be undone. If you want to retain a log of the message,
 // use the Archive method.
 func (p *PGMQ) Delete(ctx context.Context, queue string, msgID int64) (int64, error) {
-	tag, err := p.pool.Exec(ctx, "select pgmq_delete($1, $2)", queue, msgID)
+	var deleted bool
+	err := p.pool.QueryRow(ctx, "select pgmq_delete($1, $2)", queue, msgID).Scan(&deleted)
 	if err != nil {
 		return 0, wrapPostgresError(err)
 	}
 
-	return tag.RowsAffected(), nil
+	var rowsAffected int64 = 0
+	if deleted {
+		rowsAffected = 1
+	}
+
+	return rowsAffected, nil
 }
 
 func wrapPostgresError(err error) error {
