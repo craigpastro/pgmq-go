@@ -59,28 +59,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestReadEmptyQueueReturnsNoRows(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	_, err = q.Read(ctx, queue, 0)
-	require.ErrorIs(t, err, ErrNoRows)
-}
-
-func TestReadBatchEmptyQueueReturnsNoRows(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	_, err = q.ReadBatch(ctx, queue, 0, 1)
-	require.ErrorIs(t, err, ErrNoRows)
-}
-
 func TestSend(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
@@ -117,6 +95,17 @@ func TestRead(t *testing.T) {
 	require.ErrorIs(t, err, ErrNoRows)
 }
 
+func TestReadEmptyQueueReturnsNoRows(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	_, err = q.Read(ctx, queue, 0)
+	require.ErrorIs(t, err, ErrNoRows)
+}
+
 func TestReadBatch(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
@@ -143,6 +132,17 @@ func TestReadBatch(t *testing.T) {
 	require.ErrorIs(t, err, ErrNoRows)
 }
 
+func TestReadBatchEmptyQueueReturnsNoRows(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	_, err = q.ReadBatch(ctx, queue, 0, 1)
+	require.ErrorIs(t, err, ErrNoRows)
+}
+
 func TestPop(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
@@ -159,6 +159,17 @@ func TestPop(t *testing.T) {
 	require.Equal(t, id, msg.MsgID)
 
 	_, err = q.Read(ctx, queue, 0)
+	require.ErrorIs(t, err, ErrNoRows)
+}
+
+func TestPopEmptyQueueReturnsNoRows(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	_, err = q.Pop(ctx, queue)
 	require.ErrorIs(t, err, ErrNoRows)
 }
 
@@ -186,6 +197,18 @@ func TestArchive(t *testing.T) {
 	require.ErrorIs(t, err, ErrNoRows)
 }
 
+func TestArchiveNotExist(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	rowsAffected, err := q.Archive(ctx, queue, 100)
+	require.NoError(t, err)
+	require.EqualValues(t, 0, rowsAffected)
+}
+
 func TestDelete(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
@@ -202,4 +225,16 @@ func TestDelete(t *testing.T) {
 
 	_, err = q.Read(ctx, queue, 0)
 	require.ErrorIs(t, err, ErrNoRows)
+}
+
+func TestDeleteNotExist(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	rowsAffected, err := q.Delete(ctx, queue, 100)
+	require.NoError(t, err)
+	require.EqualValues(t, 0, rowsAffected)
 }
