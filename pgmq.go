@@ -81,8 +81,8 @@ func (p *PGMQ) Close() {
 
 // CreateQueue creates a new queue. This sets up the queue's tables, indexes,
 // and metadata.
-func (p *PGMQ) CreateQueue(ctx context.Context, name string) error {
-	_, err := p.pool.Exec(ctx, "select pgmq_create($1)", name)
+func (p *PGMQ) CreateQueue(ctx context.Context, queue string) error {
+	_, err := p.pool.Exec(ctx, "select pgmq_create($1)", queue)
 	if err != nil {
 		return wrapPostgresError(err)
 	}
@@ -181,9 +181,8 @@ func (p *PGMQ) Pop(ctx context.Context, queue string) (*Message, error) {
 
 // Archive moves a message from the queue table to archive table by its id.
 // View messages on the archive table with sql:
-// ```sql
-// SELECT * FROM pgmq_<queue_name>_archive;
-// ```
+//
+//	select * from pgmq_<queue_name>_archive;
 func (p *PGMQ) Archive(ctx context.Context, queue string, msgID int64) (int64, error) {
 	var archived bool
 	err := p.pool.QueryRow(ctx, "select pgmq_archive($1, $2)", queue, msgID).Scan(&archived)
