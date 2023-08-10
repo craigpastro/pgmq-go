@@ -2,7 +2,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/craigpastro/pgmq-go.svg)](https://pkg.go.dev/github.com/craigpastro/pgmq-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/craigpastro/pgmq-go)](https://goreportcard.com/report/github.com/craigpastro/pgmq-go)
-[![CI](https://github.com/craigpastro/pgmq-go/actions/workflows/ci.yaml/badge.svg)](https://github.com/craigpastro/pgmq-go/actions/workflows/ci.yaml)
+[![CI](https://github.com/craigpastro/pgmq-go/actions/workflows/push_to_main.yaml/badge.svg)](https://github.com/craigpastro/pgmq-go/actions/workflows/push_to_main.yaml)
 [![codecov](https://codecov.io/github/craigpastro/pgmq-go/branch/main/graph/badge.svg?token=00AJODX77Z)](https://codecov.io/github/craigpastro/pgmq-go)
 
 A Go (Golang) client for
@@ -11,7 +11,7 @@ A Go (Golang) client for
 
 ## Usage
 
-Start a Postgres Instance with the PGMQ extension installed:
+Start a Postgres instance with the PGMQ extension installed:
 
 ```shell
 docker run -d --name postgres -e POSTGRES_PASSWORD=password -p 5432:5432 quay.io/tembo/pgmq-pg:latest

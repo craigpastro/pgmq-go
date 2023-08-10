@@ -1,24 +1,11 @@
-name: CI
+name: Push to main
 
 on:
-  pull_request:
   push:
     branches:    
       - main
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v4
-        with:
-          go-version-file: "./go.mod"
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
-        with:
-          version: latest
-
   test:
     runs-on: ubuntu-latest
     steps:
