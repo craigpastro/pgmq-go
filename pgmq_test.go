@@ -59,6 +59,28 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func TestDropQueue(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	err = q.DropQueue(ctx, queue)
+	require.NoError(t, err)
+
+	_, err = q.Send(ctx, queue, testMsg1)
+	require.Error(t, err)
+}
+
+func TestDropQueueWhichDoesNotExist(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.DropQueue(ctx, queue)
+	require.Error(t, err)
+}
+
 func TestSend(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
