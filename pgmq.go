@@ -91,7 +91,7 @@ func (p *PGMQ) CreateQueue(ctx context.Context, queue string) error {
 }
 
 // DropQueue deletes the given queue. It deletes the queue's tables, indices,
-// and metadata.
+// and metadata. It will return an error if the queue does not exist.
 func (p *PGMQ) DropQueue(ctx context.Context, queue string) error {
 	_, err := p.pool.Exec(ctx, "select pgmq_drop_queue($1)", queue)
 	if err != nil {
