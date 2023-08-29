@@ -97,6 +97,18 @@ func TestSend(t *testing.T) {
 	require.EqualValues(t, 2, id)
 }
 
+func TestSendBatch(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	ids, err := q.SendBatch(ctx, queue, []map[string]any{testMsg1, testMsg2})
+	require.NoError(t, err)
+	require.Equal(t, []int64{1, 2}, ids)
+}
+
 func TestRead(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
@@ -135,10 +147,7 @@ func TestReadBatch(t *testing.T) {
 	err := q.CreateQueue(ctx, queue)
 	require.NoError(t, err)
 
-	_, err = q.Send(ctx, queue, testMsg1)
-	require.NoError(t, err)
-
-	_, err = q.Send(ctx, queue, testMsg2)
+	_, err = q.SendBatch(ctx, queue, []map[string]any{testMsg1, testMsg2})
 	require.NoError(t, err)
 
 	time.Sleep(time.Second)
@@ -205,11 +214,11 @@ func TestArchive(t *testing.T) {
 	id, err := q.Send(ctx, queue, testMsg1)
 	require.NoError(t, err)
 
-	rowsAffected, err := q.Archive(ctx, queue, id)
+	archived, err := q.Archive(ctx, queue, id)
 	require.NoError(t, err)
-	require.EqualValues(t, 1, rowsAffected)
+	require.True(t, archived)
 
-	// Let's just check that something landing in the archive table.
+	// Let's just check that something landed in the archive table.
 	stmt := fmt.Sprintf("select * from pgmq_%s_archive", queue)
 	tag, err := q.pool.Exec(ctx, stmt)
 	require.NoError(t, err)
@@ -226,9 +235,45 @@ func TestArchiveNotExist(t *testing.T) {
 	err := q.CreateQueue(ctx, queue)
 	require.NoError(t, err)
 
-	rowsAffected, err := q.Archive(ctx, queue, 100)
+	archived, err := q.Archive(ctx, queue, 100)
 	require.NoError(t, err)
-	require.EqualValues(t, 0, rowsAffected)
+	require.False(t, archived)
+}
+
+func TestArchiveBatch(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	ids, err := q.SendBatch(ctx, queue, []map[string]any{testMsg1, testMsg2})
+	require.NoError(t, err)
+
+	archived, err := q.ArchiveBatch(ctx, queue, ids)
+	require.NoError(t, err)
+	require.True(t, archived)
+
+	// Let's just check that something landed in the archive table.
+	stmt := fmt.Sprintf("select * from pgmq_%s_archive", queue)
+	tag, err := q.pool.Exec(ctx, stmt)
+	require.NoError(t, err)
+	require.EqualValues(t, 2, tag.RowsAffected())
+
+	_, err = q.Read(ctx, queue, 0)
+	require.ErrorIs(t, err, ErrNoRows)
+}
+
+func TestArchiveBatchNotExists(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	archived, err := q.ArchiveBatch(ctx, queue, []int64{100})
+	require.NoError(t, err)
+	require.True(t, archived)
 }
 
 func TestDelete(t *testing.T) {
@@ -241,9 +286,9 @@ func TestDelete(t *testing.T) {
 	id, err := q.Send(ctx, queue, testMsg1)
 	require.NoError(t, err)
 
-	rowsAffected, err := q.Delete(ctx, queue, id)
+	deleted, err := q.Delete(ctx, queue, id)
 	require.NoError(t, err)
-	require.EqualValues(t, 1, rowsAffected)
+	require.True(t, deleted)
 
 	_, err = q.Read(ctx, queue, 0)
 	require.ErrorIs(t, err, ErrNoRows)
@@ -256,7 +301,37 @@ func TestDeleteNotExist(t *testing.T) {
 	err := q.CreateQueue(ctx, queue)
 	require.NoError(t, err)
 
-	rowsAffected, err := q.Delete(ctx, queue, 100)
+	deleted, err := q.Delete(ctx, queue, 100)
 	require.NoError(t, err)
-	require.EqualValues(t, 0, rowsAffected)
+	require.False(t, deleted)
+}
+
+func TestDeleteBatch(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	ids, err := q.SendBatch(ctx, queue, []map[string]any{testMsg1, testMsg2})
+	require.NoError(t, err)
+
+	deleted, err := q.DeleteBatch(ctx, queue, ids)
+	require.NoError(t, err)
+	require.True(t, deleted)
+
+	_, err = q.Read(ctx, queue, 0)
+	require.ErrorIs(t, err, ErrNoRows)
+}
+
+func TestDeleteBatchNotExists(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	archived, err := q.DeleteBatch(ctx, queue, []int64{100})
+	require.NoError(t, err)
+	require.True(t, archived)
 }

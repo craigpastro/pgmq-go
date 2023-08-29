@@ -6,8 +6,8 @@
 [![codecov](https://codecov.io/github/craigpastro/pgmq-go/branch/main/graph/badge.svg?token=00AJODX77Z)](https://codecov.io/github/craigpastro/pgmq-go)
 
 A Go (Golang) client for
-[Postgres Message Queue](https://github.com/tembo-io/pgmq) (PGMQ). Based on the
-[Rust client](https://github.com/tembo-io/pgmq/tree/main/core).
+[Postgres Message Queue](https://github.com/tembo-io/pgmq) (PGMQ). Based loosely
+on the [Rust client](https://github.com/tembo-io/pgmq/tree/main/core).
 
 ## Usage
 
