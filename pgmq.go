@@ -9,6 +9,7 @@ import (
 
 	"github.com/craigpastro/retrier"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -26,8 +27,15 @@ type Message struct {
 	Message map[string]any
 }
 
+type DB interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Close()
+}
+
 type PGMQ struct {
-	pool *pgxpool.Pool
+	db DB
 }
 
 // New establishes a connection to Postgres given by the connString, then
@@ -60,29 +68,29 @@ func New(connString string) (*PGMQ, error) {
 	}
 
 	return &PGMQ{
-		pool: pool,
+		db: pool,
 	}, nil
 }
 
 // MustNew is similar to New, but panics if it encounters an error.
 func MustNew(connString string) *PGMQ {
-	pgmq, err := New(connString)
+	q, err := New(connString)
 	if err != nil {
 		panic(err)
 	}
 
-	return pgmq
+	return q
 }
 
 // Close closes the underlying connection pool.
 func (p *PGMQ) Close() {
-	p.pool.Close()
+	p.db.Close()
 }
 
 // CreateQueue creates a new queue. This sets up the queue's tables, indexes,
 // and metadata.
 func (p *PGMQ) CreateQueue(ctx context.Context, queue string) error {
-	_, err := p.pool.Exec(ctx, "select pgmq_create($1)", queue)
+	_, err := p.db.Exec(ctx, "select pgmq_create($1)", queue)
 	if err != nil {
 		return wrapPostgresError(err)
 	}
@@ -93,7 +101,7 @@ func (p *PGMQ) CreateQueue(ctx context.Context, queue string) error {
 // DropQueue deletes the given queue. It deletes the queue's tables, indices,
 // and metadata. It will return an error if the queue does not exist.
 func (p *PGMQ) DropQueue(ctx context.Context, queue string) error {
-	_, err := p.pool.Exec(ctx, "select pgmq_drop_queue($1)", queue)
+	_, err := p.db.Exec(ctx, "select pgmq_drop_queue($1)", queue)
 	if err != nil {
 		return wrapPostgresError(err)
 	}
@@ -105,7 +113,7 @@ func (p *PGMQ) DropQueue(ctx context.Context, queue string) error {
 // queue, is returned.
 func (p *PGMQ) Send(ctx context.Context, queue string, msg map[string]any) (int64, error) {
 	var msgID int64
-	err := p.pool.QueryRow(ctx, "select * from pgmq_send($1, $2)", queue, msg).Scan(&msgID)
+	err := p.db.QueryRow(ctx, "select * from pgmq_send($1, $2)", queue, msg).Scan(&msgID)
 	if err != nil {
 		return 0, wrapPostgresError(err)
 	}
@@ -116,7 +124,7 @@ func (p *PGMQ) Send(ctx context.Context, queue string, msg map[string]any) (int6
 // SendBatch sends a batch of messages to a queue. The message ids, unique to the
 // queue, are returned.
 func (p *PGMQ) SendBatch(ctx context.Context, queue string, msgs []map[string]any) ([]int64, error) {
-	rows, err := p.pool.Query(ctx, "select * from pgmq_send_batch($1, $2::jsonb[])", queue, msgs)
+	rows, err := p.db.Query(ctx, "select * from pgmq_send_batch($1, $2::jsonb[])", queue, msgs)
 	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
@@ -145,7 +153,7 @@ func (p *PGMQ) Read(ctx context.Context, queue string, vt int64) (*Message, erro
 	}
 
 	var msg Message
-	err := p.pool.
+	err := p.db.
 		QueryRow(ctx, "select * from pgmq_read($1, $2, $3)", queue, vt, 1).
 		Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
 	if err != nil {
@@ -170,7 +178,7 @@ func (p *PGMQ) ReadBatch(ctx context.Context, queue string, vt int64, numMsgs in
 		vt = vtDefault
 	}
 
-	rows, err := p.pool.Query(ctx, "select * from pgmq_read($1, $2, $3)", queue, vt, numMsgs)
+	rows, err := p.db.Query(ctx, "select * from pgmq_read($1, $2, $3)", queue, vt, numMsgs)
 	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
@@ -199,7 +207,7 @@ func (p *PGMQ) ReadBatch(ctx context.Context, queue string, vt int64, numMsgs in
 // This is because the message is immediately deleted.
 func (p *PGMQ) Pop(ctx context.Context, queue string) (*Message, error) {
 	var msg Message
-	err := p.pool.
+	err := p.db.
 		QueryRow(ctx, "select * from pgmq_pop($1)", queue).
 		Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
 	if err != nil {
@@ -218,7 +226,7 @@ func (p *PGMQ) Pop(ctx context.Context, queue string) (*Message, error) {
 //	select * from pgmq_<queue_name>_archive;
 func (p *PGMQ) Archive(ctx context.Context, queue string, msgID int64) (bool, error) {
 	var archived bool
-	err := p.pool.QueryRow(ctx, "select pgmq_archive($1, $2::bigint)", queue, msgID).Scan(&archived)
+	err := p.db.QueryRow(ctx, "select pgmq_archive($1, $2::bigint)", queue, msgID).Scan(&archived)
 	if err != nil {
 		return false, wrapPostgresError(err)
 	}
@@ -232,7 +240,7 @@ func (p *PGMQ) Archive(ctx context.Context, queue string, msgID int64) (bool, er
 //	select * from pgmq_<queue_name>_archive;
 func (p *PGMQ) ArchiveBatch(ctx context.Context, queue string, msgIDs []int64) (bool, error) {
 	var archived bool
-	err := p.pool.QueryRow(ctx, "select pgmq_archive($1, $2::bigint[])", queue, msgIDs).Scan(&archived)
+	err := p.db.QueryRow(ctx, "select pgmq_archive($1, $2::bigint[])", queue, msgIDs).Scan(&archived)
 	if err != nil {
 		return false, wrapPostgresError(err)
 	}
@@ -245,7 +253,7 @@ func (p *PGMQ) ArchiveBatch(ctx context.Context, queue string, msgIDs []int64) (
 // use the Archive method.
 func (p *PGMQ) Delete(ctx context.Context, queue string, msgID int64) (bool, error) {
 	var deleted bool
-	err := p.pool.QueryRow(ctx, "select pgmq_delete($1, $2::bigint)", queue, msgID).Scan(&deleted)
+	err := p.db.QueryRow(ctx, "select pgmq_delete($1, $2::bigint)", queue, msgID).Scan(&deleted)
 	if err != nil {
 		return false, wrapPostgresError(err)
 	}
@@ -258,7 +266,7 @@ func (p *PGMQ) Delete(ctx context.Context, queue string, msgID int64) (bool, err
 // the messages, use the ArchiveBatch method.
 func (p *PGMQ) DeleteBatch(ctx context.Context, queue string, msgIDs []int64) (bool, error) {
 	var deleted bool
-	err := p.pool.QueryRow(ctx, "select pgmq_delete($1, $2::bigint[])", queue, msgIDs).Scan(&deleted)
+	err := p.db.QueryRow(ctx, "select pgmq_delete($1, $2::bigint[])", queue, msgIDs).Scan(&deleted)
 	if err != nil {
 		return false, wrapPostgresError(err)
 	}

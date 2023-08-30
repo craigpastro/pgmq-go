@@ -2,14 +2,18 @@ package pgmq
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/craigpastro/pgmq-go/mocks"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"go.uber.org/mock/gomock"
 )
 
 var q *PGMQ
@@ -220,7 +224,7 @@ func TestArchive(t *testing.T) {
 
 	// Let's just check that something landed in the archive table.
 	stmt := fmt.Sprintf("select * from pgmq_%s_archive", queue)
-	tag, err := q.pool.Exec(ctx, stmt)
+	tag, err := q.db.Exec(ctx, stmt)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, tag.RowsAffected())
 
@@ -256,7 +260,7 @@ func TestArchiveBatch(t *testing.T) {
 
 	// Let's just check that something landed in the archive table.
 	stmt := fmt.Sprintf("select * from pgmq_%s_archive", queue)
-	tag, err := q.pool.Exec(ctx, stmt)
+	tag, err := q.db.Exec(ctx, stmt)
 	require.NoError(t, err)
 	require.EqualValues(t, 2, tag.RowsAffected())
 
@@ -334,4 +338,71 @@ func TestDeleteBatchNotExists(t *testing.T) {
 	archived, err := q.DeleteBatch(ctx, queue, []int64{100})
 	require.NoError(t, err)
 	require.True(t, archived)
+}
+
+func TestErrorCases(t *testing.T) {
+	ctx := context.Background()
+
+	queue := t.Name()
+	testErr := errors.New("an error")
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockDB := mocks.NewMockDB(ctrl)
+	q := PGMQ{db: mockDB}
+
+	mockRow := mocks.NewMockRow(ctrl)
+
+	t.Run("createQueueError", func(t *testing.T) {
+		mockDB.EXPECT().Exec(ctx, "select pgmq_create($1)", queue).Return(pgconn.NewCommandTag(""), testErr)
+		err := q.CreateQueue(ctx, queue)
+		require.ErrorContains(t, err, "postgres error")
+	})
+
+	t.Run("dropQueueError", func(t *testing.T) {
+		mockDB.EXPECT().Exec(ctx, "select pgmq_drop_queue($1)", queue).Return(pgconn.NewCommandTag(""), testErr)
+		err := q.DropQueue(ctx, queue)
+		require.ErrorContains(t, err, "postgres error")
+	})
+
+	t.Run("sendError", func(t *testing.T) {
+		mockRow.EXPECT().Scan(gomock.Any()).Return(testErr)
+		mockDB.EXPECT().QueryRow(ctx, "select * from pgmq_send($1, $2)", queue, gomock.Any()).Return(mockRow)
+		id, err := q.Send(ctx, queue, testMsg1)
+		require.EqualValues(t, 0, id)
+		require.ErrorContains(t, err, "postgres error")
+	})
+
+	t.Run("readError", func(t *testing.T) {
+		mockRow.EXPECT().Scan(gomock.Any()).Return(testErr)
+		mockDB.EXPECT().QueryRow(ctx, "select * from pgmq_read($1, $2, $3)", queue, gomock.Any(), gomock.Any()).Return(mockRow)
+		msg, err := q.Read(ctx, queue, 0)
+		require.Nil(t, msg)
+		require.ErrorContains(t, err, "postgres error")
+	})
+
+	t.Run("popError", func(t *testing.T) {
+		mockRow.EXPECT().Scan(gomock.Any()).Return(testErr)
+		mockDB.EXPECT().QueryRow(ctx, "select * from pgmq_pop($1)", queue).Return(mockRow)
+		msg, err := q.Pop(ctx, queue)
+		require.Nil(t, msg)
+		require.ErrorContains(t, err, "postgres error")
+	})
+
+	t.Run("archiveError", func(t *testing.T) {
+		mockRow.EXPECT().Scan(gomock.Any()).Return(testErr)
+		mockDB.EXPECT().QueryRow(ctx, "select pgmq_archive($1, $2::bigint)", queue, gomock.Any()).Return(mockRow)
+		archived, err := q.Archive(ctx, queue, 7)
+		require.False(t, archived)
+		require.ErrorContains(t, err, "postgres error")
+	})
+
+	t.Run("deleteError", func(t *testing.T) {
+		mockRow.EXPECT().Scan(gomock.Any()).Return(testErr)
+		mockDB.EXPECT().QueryRow(ctx, "select pgmq_delete($1, $2::bigint)", queue, gomock.Any()).Return(mockRow)
+		deleted, err := q.Delete(ctx, queue, 7)
+		require.False(t, deleted)
+		require.ErrorContains(t, err, "postgres error")
+	})
 }
