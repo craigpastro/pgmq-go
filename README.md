@@ -7,7 +7,7 @@
 
 A Go (Golang) client for
 [Postgres Message Queue](https://github.com/tembo-io/pgmq) (PGMQ). Based loosely
-on the [Rust client](https://github.com/tembo-io/pgmq/tree/main/core).
+on the [Rust client](https://github.com/tembo-io/pgmq/tree/main/pgmq-rs).
 
 ## Usage
 
