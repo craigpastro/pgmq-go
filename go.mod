@@ -6,7 +6,7 @@ require (
 	github.com/craigpastro/retrier v0.1.2
 	github.com/jackc/pgx/v5 v5.4.3
 	github.com/stretchr/testify v1.8.4
-	github.com/testcontainers/testcontainers-go v0.22.0
+	github.com/testcontainers/testcontainers-go v0.23.0
 	go.uber.org/mock v0.2.0
 )
 
