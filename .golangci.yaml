@@ -6,7 +6,7 @@ linters:
   enable:
     - errname
     - gofmt
-    - goimports
+    - gci
     - sqlclosecheck
     - stylecheck
     - unconvert
