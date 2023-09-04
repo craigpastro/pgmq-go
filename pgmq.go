@@ -39,8 +39,8 @@ type PGMQ struct {
 	db DB
 }
 
-// New establishes a connection to Postgres given by the connString, then
-// creates the pgmq extension if it does not already exist.
+// New establishes a connection to Postgres given by the connString, checks connection, if check is failed,
+// returns ErrPing, that can be retried,then creates the pgmq extension if it does not already exist.
 func New(ctx context.Context, connString string) (*PGMQ, error) {
 	cfg, err := pgxpool.ParseConfig(connString)
 	if err != nil {
