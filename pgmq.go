@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
-	"github.com/craigpastro/retrier"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,7 +13,10 @@ import (
 
 const vtDefault = 30
 
-var ErrNoRows = errors.New("pgmq: no rows in result set")
+var (
+	ErrNoRows = errors.New("pgmq: no rows in result set")
+	ErrPing   = errors.New("failed to ping db")
+)
 
 type Message struct {
 	MsgID      int64
@@ -40,29 +41,23 @@ type PGMQ struct {
 
 // New establishes a connection to Postgres given by the connString, then
 // creates the pgmq extension if it does not already exist.
-func New(connString string) (*PGMQ, error) {
+func New(ctx context.Context, connString string) (*PGMQ, error) {
 	cfg, err := pgxpool.ParseConfig(connString)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing connection string: %w", err)
 	}
 
-	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating pool: %w", err)
 	}
 
-	err = retrier.Do(func() error {
-		if err = pool.Ping(context.Background()); err != nil {
-			log.Println("waiting for Postgres")
-			return err
-		}
-		return nil
-	}, retrier.NewExponentialBackoff())
+	err = pool.Ping(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error connecting to Postgres: %w", err)
+		return nil, errors.Join(err, ErrPing)
 	}
 
-	_, err = pool.Exec(context.Background(), "create extension if not exists pgmq cascade")
+	_, err = pool.Exec(ctx, "create extension if not exists pgmq cascade")
 	if err != nil {
 		return nil, fmt.Errorf("error creating pgmq extension: %w", err)
 	}
@@ -73,8 +68,8 @@ func New(connString string) (*PGMQ, error) {
 }
 
 // MustNew is similar to New, but panics if it encounters an error.
-func MustNew(connString string) *PGMQ {
-	q, err := New(connString)
+func MustNew(ctx context.Context, connString string) *PGMQ {
+	q, err := New(ctx, connString)
 	if err != nil {
 		panic(err)
 	}
