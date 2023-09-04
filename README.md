@@ -30,12 +30,12 @@ import (
 )
 
 func main() {
-    q, err := pgmq.New(context.Background(), "postgres://postgres:password@localhost:5432/postgres")
+    ctx := context.Background()
+
+    q, err := pgmq.New(ctx, "postgres://postgres:password@localhost:5432/postgres")
     if err != nil {
         panic(err)
     }
-
-    ctx := context.Background()
 
     err = q.CreateQueue(ctx, "my_queue")
     if err != nil {
