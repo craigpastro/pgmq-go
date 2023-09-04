@@ -12,5 +12,5 @@ linters:
     - unconvert
     - unparam
 
-issues:
-  fix: true
+# issues:
+#   fix: true
