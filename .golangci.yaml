@@ -11,6 +11,3 @@ linters:
     - stylecheck
     - unconvert
     - unparam
-
-# issues:
-#   fix: true
