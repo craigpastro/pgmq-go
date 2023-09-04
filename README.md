@@ -30,7 +30,7 @@ import (
 )
 
 func main() {
-    q, err := pgmq.New("postgres://postgres:password@localhost:5432/postgres")
+    q, err := pgmq.New(context.Background(), "postgres://postgres:password@localhost:5432/postgres")
     if err != nil {
         panic(err)
     }
