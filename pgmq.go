@@ -15,7 +15,7 @@ const vtDefault = 30
 
 var (
 	ErrNoRows = errors.New("pgmq: no rows in result set")
-	ErrPing   = errors.New("failed to ping db")
+	ErrPing   = errors.New("pgmq: failed to ping db")
 )
 
 type Message struct {
@@ -40,7 +40,7 @@ type PGMQ struct {
 }
 
 // New establishes a connection to Postgres given by the connString, checks connection, if check is failed,
-// returns ErrPing, that can be retried,then creates the pgmq extension if it does not already exist.
+// returns ErrPing, that can be retried, then creates the pgmq extension if it does not already exist.
 func New(ctx context.Context, connString string) (*PGMQ, error) {
 	cfg, err := pgxpool.ParseConfig(connString)
 	if err != nil {

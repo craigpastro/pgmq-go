@@ -14,7 +14,6 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/mock/gomock"
-
 	"github.com/craigpastro/pgmq-go/mocks"
 )
 
