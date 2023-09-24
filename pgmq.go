@@ -13,10 +13,7 @@ import (
 
 const vtDefault = 30
 
-var (
-	ErrNoRows = errors.New("pgmq: no rows in result set")
-	ErrPing   = errors.New("pgmq: failed to ping db")
-)
+var ErrNoRows = errors.New("pgmq: no rows in result set")
 
 type Message struct {
 	MsgID      int64
@@ -39,8 +36,9 @@ type PGMQ struct {
 	db DB
 }
 
-// New establishes a connection to Postgres given by the connString, checks connection, if check is failed,
-// returns ErrPing, that can be retried, then creates the pgmq extension if it does not already exist.
+// New uses the connString to attempt to establish a connection to Postgres.
+// Once a connetion is established it will create the PGMQ extension if it
+// does not already exist.
 func New(ctx context.Context, connString string) (*PGMQ, error) {
 	cfg, err := pgxpool.ParseConfig(connString)
 	if err != nil {
@@ -54,7 +52,7 @@ func New(ctx context.Context, connString string) (*PGMQ, error) {
 
 	err = pool.Ping(ctx)
 	if err != nil {
-		return nil, errors.Join(err, ErrPing)
+		return nil, err
 	}
 
 	_, err = pool.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS pgmq CASCADE")
@@ -107,8 +105,16 @@ func (p *PGMQ) DropQueue(ctx context.Context, queue string) error {
 // Send sends a single message to a queue. The message id, unique to the
 // queue, is returned.
 func (p *PGMQ) Send(ctx context.Context, queue string, msg map[string]any) (int64, error) {
+	return p.SendWithDelay(ctx, queue, msg, 0)
+}
+
+// SendWithDelay sends a single message to a queue with a delay. The delay
+// is specified in seconds. The message id, unique to the queue, is returned.
+func (p *PGMQ) SendWithDelay(ctx context.Context, queue string, msg map[string]any, delay int) (int64, error) {
 	var msgID int64
-	err := p.db.QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2)", queue, msg).Scan(&msgID)
+	err := p.db.
+		QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3)", queue, msg, delay).
+		Scan(&msgID)
 	if err != nil {
 		return 0, wrapPostgresError(err)
 	}
@@ -116,10 +122,17 @@ func (p *PGMQ) Send(ctx context.Context, queue string, msg map[string]any) (int6
 	return msgID, nil
 }
 
-// SendBatch sends a batch of messages to a queue. The message ids, unique to the
-// queue, are returned.
+// SendBatch sends a batch of messages to a queue. The message ids, unique to
+// the queue, are returned.
 func (p *PGMQ) SendBatch(ctx context.Context, queue string, msgs []map[string]any) ([]int64, error) {
-	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[])", queue, msgs)
+	return p.SendBatchWithDelay(ctx, queue, msgs, 0)
+}
+
+// SendBatchWithDelay sends a batch of messages to a queue with a delay. The
+// delay is specified in seconds. The message ids, unique to the queue, are
+// returned.
+func (p *PGMQ) SendBatchWithDelay(ctx context.Context, queue string, msgs []map[string]any, delay int) ([]int64, error) {
+	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3)", queue, msgs, delay)
 	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
