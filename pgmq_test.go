@@ -356,7 +356,7 @@ func TestErrorCases(t *testing.T) {
 	})
 
 	t.Run("sendError", func(t *testing.T) {
-		mockDB.EXPECT().QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2)", queue, gomock.Any()).Return(mockRow)
+		mockDB.EXPECT().QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3)", queue, gomock.Any(), 0).Return(mockRow)
 		mockRow.EXPECT().Scan(gomock.Any()).Return(testErr)
 		id, err := q.Send(ctx, queue, testMsg1)
 		require.EqualValues(t, 0, id)
@@ -364,7 +364,7 @@ func TestErrorCases(t *testing.T) {
 	})
 
 	t.Run("sendBatchError", func(t *testing.T) {
-		mockDB.EXPECT().Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[])", queue, gomock.Any()).Return(nil, testErr)
+		mockDB.EXPECT().Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3)", queue, gomock.Any(), 0).Return(nil, testErr)
 		ids, err := q.SendBatch(ctx, queue, []map[string]any{testMsg1})
 		require.Nil(t, ids)
 		require.ErrorContains(t, err, "postgres error")
