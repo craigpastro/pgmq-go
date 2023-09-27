@@ -256,8 +256,7 @@ func (p *PGMQ) ArchiveBatch(ctx context.Context, queue string, msgIDs []int64) (
 	var archived []int64
 	for rows.Next() {
 		var n int64
-		err = rows.Scan(&n)
-		if err != nil {
+		if err := rows.Scan(&n); err != nil {
 			return nil, wrapPostgresError(err)
 		}
 		archived = append(archived, n)
@@ -292,8 +291,7 @@ func (p *PGMQ) DeleteBatch(ctx context.Context, queue string, msgIDs []int64) ([
 	var deleted []int64
 	for rows.Next() {
 		var n int64
-		err = rows.Scan(&n)
-		if err != nil {
+		if err := rows.Scan(&n); err != nil {
 			return nil, wrapPostgresError(err)
 		}
 		deleted = append(deleted, n)
