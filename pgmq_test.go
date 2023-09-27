@@ -169,8 +169,9 @@ func TestReadBatch(t *testing.T) {
 	require.Equal(t, testMsg2, msgs[1].Message)
 
 	// Visibility timeout will still be in effect.
-	_, err = q.ReadBatch(ctx, queue, 0, 5)
-	require.ErrorIs(t, err, ErrNoRows)
+	msgs, err = q.ReadBatch(ctx, queue, 0, 5)
+	require.NoError(t, err)
+	require.Empty(t, msgs)
 }
 
 func TestPop(t *testing.T) {
