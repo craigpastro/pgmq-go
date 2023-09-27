@@ -173,17 +173,6 @@ func TestReadBatch(t *testing.T) {
 	require.ErrorIs(t, err, ErrNoRows)
 }
 
-func TestReadBatchEmptyQueueReturnsNoRows(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	_, err = q.ReadBatch(ctx, queue, 0, 1)
-	require.ErrorIs(t, err, ErrNoRows)
-}
-
 func TestPop(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()

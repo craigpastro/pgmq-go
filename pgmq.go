@@ -178,9 +178,6 @@ func (p *PGMQ) Read(ctx context.Context, queue string, vt int64) (*Message, erro
 // messages that are returned are made invisible for the duration of the
 // visibility timeout (vt) in seconds. If vt is 0 it will be set to the
 // default value, vtDefault.
-//
-// If the queue is empty or all messages are invisible an ErrNoRows error is
-// returned.
 func (p *PGMQ) ReadBatch(ctx context.Context, queue string, vt int64, numMsgs int64) ([]*Message, error) {
 	if vt == 0 {
 		vt = vtDefault
@@ -200,10 +197,6 @@ func (p *PGMQ) ReadBatch(ctx context.Context, queue string, vt int64, numMsgs in
 			return nil, wrapPostgresError(err)
 		}
 		msgs = append(msgs, &msg)
-	}
-
-	if len(msgs) == 0 {
-		return nil, ErrNoRows
 	}
 
 	return msgs, nil
