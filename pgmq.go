@@ -246,21 +246,21 @@ func (p *PGMQ) Archive(ctx context.Context, queue string, msgID int64) (bool, er
 // table by their ids. View messages on the archive table with sql:
 //
 //	SELECT * FROM pgmq.a_<queue_name>_archive;
-func (p *PGMQ) ArchiveBatch(ctx context.Context, queue string, msgIDs []int64) ([]bool, error) {
+func (p *PGMQ) ArchiveBatch(ctx context.Context, queue string, msgIDs []int64) ([]int64, error) {
 	rows, err := p.db.Query(ctx, "SELECT pgmq.archive($1, $2::bigint[])", queue, msgIDs)
 	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
 	defer rows.Close()
 
-	var archived []bool
+	var archived []int64
 	for rows.Next() {
-		var b bool
-		err = rows.Scan(&b)
+		var n int64
+		err = rows.Scan(&n)
 		if err != nil {
 			return nil, wrapPostgresError(err)
 		}
-		archived = append(archived, b)
+		archived = append(archived, n)
 	}
 
 	return archived, nil
@@ -282,21 +282,21 @@ func (p *PGMQ) Delete(ctx context.Context, queue string, msgID int64) (bool, err
 // DeleteBatch deletes a batch of messages from the queue by their ids. This
 // is a permanent delete and cannot be undone. If you want to retain a log of
 // the messages, use the ArchiveBatch method.
-func (p *PGMQ) DeleteBatch(ctx context.Context, queue string, msgIDs []int64) ([]bool, error) {
+func (p *PGMQ) DeleteBatch(ctx context.Context, queue string, msgIDs []int64) ([]int64, error) {
 	rows, err := p.db.Query(ctx, "SELECT pgmq.delete($1, $2::bigint[])", queue, msgIDs)
 	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
 	defer rows.Close()
 
-	var deleted []bool
+	var deleted []int64
 	for rows.Next() {
-		var b bool
-		err = rows.Scan(&b)
+		var n int64
+		err = rows.Scan(&n)
 		if err != nil {
 			return nil, wrapPostgresError(err)
 		}
-		deleted = append(deleted, b)
+		deleted = append(deleted, n)
 	}
 
 	return deleted, nil
