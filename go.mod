@@ -7,7 +7,7 @@ require (
 	github.com/jackc/pgx/v5 v5.4.3
 	github.com/stretchr/testify v1.8.4
 	github.com/testcontainers/testcontainers-go v0.25.0
-	go.uber.org/mock v0.2.0
+	go.uber.org/mock v0.3.0
 )
 
 require (
