@@ -5,8 +5,9 @@ run:
 linters:
   enable:
     - errname
-    - gofmt
     - gci
+    - gofmt
+    - gosec
     - sqlclosecheck
     - stylecheck
     - unconvert
