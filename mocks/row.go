@@ -38,7 +38,7 @@ func (m *MockRow) EXPECT() *MockRowMockRecorder {
 }
 
 // Scan mocks base method.
-func (m *MockRow) Scan(arg0 ...interface{}) error {
+func (m *MockRow) Scan(arg0 ...any) error {
 	m.ctrl.T.Helper()
 	varargs := []any{}
 	for _, a := range arg0 {

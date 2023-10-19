@@ -350,6 +350,12 @@ func TestErrorCases(t *testing.T) {
 		require.ErrorContains(t, err, "postgres error")
 	})
 
+	t.Run("createUnloggedQueueError", func(t *testing.T) {
+		mockDB.EXPECT().Exec(ctx, "SELECT pgmq.create_unlogged($1)", queue).Return(cmdTag, testErr)
+		err := q.CreateUnloggedQueue(ctx, queue)
+		require.ErrorContains(t, err, "postgres error")
+	})
+
 	t.Run("dropQueueError", func(t *testing.T) {
 		mockDB.EXPECT().Exec(ctx, "SELECT pgmq.drop_queue($1)", queue).Return(cmdTag, testErr)
 		err := q.DropQueue(ctx, queue)
