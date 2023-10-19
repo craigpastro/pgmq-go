@@ -69,7 +69,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestDropQueue(t *testing.T) {
+func TestCreateAndDropQueue(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
@@ -88,6 +88,23 @@ func TestDropQueueWhichDoesNotExist(t *testing.T) {
 	queue := t.Name()
 
 	err := q.DropQueue(ctx, queue)
+	require.Error(t, err)
+}
+
+func TestCreateUnloggedAndDropQueue(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.CreateUnloggedQueue(ctx, queue)
+	require.NoError(t, err)
+
+	_, err = q.Send(ctx, queue, testMsg1)
+	require.NoError(t, err)
+
+	err = q.DropQueue(ctx, queue)
+	require.NoError(t, err)
+
+	_, err = q.Send(ctx, queue, testMsg1)
 	require.Error(t, err)
 }
 
@@ -169,19 +186,9 @@ func TestReadBatch(t *testing.T) {
 	require.Equal(t, testMsg2, msgs[1].Message)
 
 	// Visibility timeout will still be in effect.
-	_, err = q.ReadBatch(ctx, queue, 0, 5)
-	require.ErrorIs(t, err, ErrNoRows)
-}
-
-func TestReadBatchEmptyQueueReturnsNoRows(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
+	msgs, err = q.ReadBatch(ctx, queue, 0, 5)
 	require.NoError(t, err)
-
-	_, err = q.ReadBatch(ctx, queue, 0, 1)
-	require.ErrorIs(t, err, ErrNoRows)
+	require.Empty(t, msgs)
 }
 
 func TestPop(t *testing.T) {
@@ -260,12 +267,9 @@ func TestArchiveBatch(t *testing.T) {
 	ids, err := q.SendBatch(ctx, queue, []map[string]any{testMsg1, testMsg2})
 	require.NoError(t, err)
 
-	// Add a msgID that definitely does not exist to the end.
-	ids = append(ids, -1)
-
 	archived, err := q.ArchiveBatch(ctx, queue, ids)
 	require.NoError(t, err)
-	require.Equal(t, []bool{true, true, false}, archived)
+	require.Equal(t, ids, archived)
 
 	// Let's check that the two messages landed in the archive table.
 	stmt := fmt.Sprintf("SELECT * FROM pgmq.a_%s", queue)
@@ -317,12 +321,9 @@ func TestDeleteBatch(t *testing.T) {
 	ids, err := q.SendBatch(ctx, queue, []map[string]any{testMsg1, testMsg2})
 	require.NoError(t, err)
 
-	// Add a msgID that definitely does not exist to the end.
-	ids = append(ids, -1)
-
 	deleted, err := q.DeleteBatch(ctx, queue, ids)
 	require.NoError(t, err)
-	require.EqualValues(t, []bool{true, true, false}, deleted)
+	require.EqualValues(t, ids, deleted)
 
 	_, err = q.Read(ctx, queue, 0)
 	require.ErrorIs(t, err, ErrNoRows)
@@ -356,7 +357,7 @@ func TestErrorCases(t *testing.T) {
 	})
 
 	t.Run("sendError", func(t *testing.T) {
-		mockDB.EXPECT().QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2)", queue, gomock.Any()).Return(mockRow)
+		mockDB.EXPECT().QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3)", queue, gomock.Any(), 0).Return(mockRow)
 		mockRow.EXPECT().Scan(gomock.Any()).Return(testErr)
 		id, err := q.Send(ctx, queue, testMsg1)
 		require.EqualValues(t, 0, id)
@@ -364,7 +365,7 @@ func TestErrorCases(t *testing.T) {
 	})
 
 	t.Run("sendBatchError", func(t *testing.T) {
-		mockDB.EXPECT().Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[])", queue, gomock.Any()).Return(nil, testErr)
+		mockDB.EXPECT().Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3)", queue, gomock.Any(), 0).Return(nil, testErr)
 		ids, err := q.SendBatch(ctx, queue, []map[string]any{testMsg1})
 		require.Nil(t, ids)
 		require.ErrorContains(t, err, "postgres error")
