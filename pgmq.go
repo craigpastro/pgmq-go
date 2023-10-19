@@ -91,6 +91,18 @@ func (p *PGMQ) CreateQueue(ctx context.Context, queue string) error {
 	return nil
 }
 
+// CreateUnloggedQueue creates a new unlogged queue, which uses an unlogged
+// table under the hood. This sets up the queue's tables, indexes, and
+// metadata.
+func (p *PGMQ) CreateUnloggedQueue(ctx context.Context, queue string) error {
+	_, err := p.db.Exec(ctx, "SELECT pgmq.create_unlogged($1)", queue)
+	if err != nil {
+		return wrapPostgresError(err)
+	}
+
+	return nil
+}
+
 // DropQueue deletes the given queue. It deletes the queue's tables, indices,
 // and metadata. It will return an error if the queue does not exist.
 func (p *PGMQ) DropQueue(ctx context.Context, queue string) error {
