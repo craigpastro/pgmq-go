@@ -52,7 +52,7 @@ func main() {
         panic(err)
     }
 
-    // Archive the message by moving it to the "pgmq_<queue_name>_archive" table.
+    // Archive the message by moving it to the "pgmq.a_<queue_name>" table.
     // Alternatively, you can `Delete` the message, or read and delete in one
     // call by using `Pop`.
     _, err = q.Archive(ctx, "my_queue", id)
