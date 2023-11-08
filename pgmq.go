@@ -237,7 +237,7 @@ func (p *PGMQ) Pop(ctx context.Context, queue string) (*Message, error) {
 // Archive moves a message from the queue table to the archive table by its
 // id. View messages on the archive table with sql:
 //
-//	select * from pgmq_<queue_name>_archive;
+//	SELECT * FROM pgmq.a_<queue_name>;
 func (p *PGMQ) Archive(ctx context.Context, queue string, msgID int64) (bool, error) {
 	var archived bool
 	err := p.db.QueryRow(ctx, "SELECT pgmq.archive($1, $2::bigint)", queue, msgID).Scan(&archived)
@@ -251,7 +251,7 @@ func (p *PGMQ) Archive(ctx context.Context, queue string, msgID int64) (bool, er
 // ArchiveBatch moves a batch of messages from the queue table to the archive
 // table by their ids. View messages on the archive table with sql:
 //
-//	SELECT * FROM pgmq.a_<queue_name>_archive;
+//	SELECT * FROM pgmq.a_<queue_name>;
 func (p *PGMQ) ArchiveBatch(ctx context.Context, queue string, msgIDs []int64) ([]int64, error) {
 	rows, err := p.db.Query(ctx, "SELECT pgmq.archive($1, $2::bigint[])", queue, msgIDs)
 	if err != nil {
