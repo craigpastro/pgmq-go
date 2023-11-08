@@ -2,6 +2,7 @@ package pgmq
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -22,7 +23,7 @@ type Message struct {
 	// VT is "visibility time". The UTC timestamp at which the message will
 	// be available for reading again.
 	VT      time.Time
-	Message map[string]any
+	Message json.RawMessage
 }
 
 type DB interface {
@@ -116,13 +117,13 @@ func (p *PGMQ) DropQueue(ctx context.Context, queue string) error {
 
 // Send sends a single message to a queue. The message id, unique to the
 // queue, is returned.
-func (p *PGMQ) Send(ctx context.Context, queue string, msg map[string]any) (int64, error) {
+func (p *PGMQ) Send(ctx context.Context, queue string, msg json.RawMessage) (int64, error) {
 	return p.SendWithDelay(ctx, queue, msg, 0)
 }
 
 // SendWithDelay sends a single message to a queue with a delay. The delay
 // is specified in seconds. The message id, unique to the queue, is returned.
-func (p *PGMQ) SendWithDelay(ctx context.Context, queue string, msg map[string]any, delay int) (int64, error) {
+func (p *PGMQ) SendWithDelay(ctx context.Context, queue string, msg json.RawMessage, delay int) (int64, error) {
 	var msgID int64
 	err := p.db.
 		QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3)", queue, msg, delay).
@@ -136,14 +137,14 @@ func (p *PGMQ) SendWithDelay(ctx context.Context, queue string, msg map[string]a
 
 // SendBatch sends a batch of messages to a queue. The message ids, unique to
 // the queue, are returned.
-func (p *PGMQ) SendBatch(ctx context.Context, queue string, msgs []map[string]any) ([]int64, error) {
+func (p *PGMQ) SendBatch(ctx context.Context, queue string, msgs []json.RawMessage) ([]int64, error) {
 	return p.SendBatchWithDelay(ctx, queue, msgs, 0)
 }
 
 // SendBatchWithDelay sends a batch of messages to a queue with a delay. The
 // delay is specified in seconds. The message ids, unique to the queue, are
 // returned.
-func (p *PGMQ) SendBatchWithDelay(ctx context.Context, queue string, msgs []map[string]any, delay int) ([]int64, error) {
+func (p *PGMQ) SendBatchWithDelay(ctx context.Context, queue string, msgs []json.RawMessage, delay int) ([]int64, error) {
 	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3)", queue, msgs, delay)
 	if err != nil {
 		return nil, wrapPostgresError(err)
