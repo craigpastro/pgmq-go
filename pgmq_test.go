@@ -2,6 +2,7 @@ package pgmq
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -20,8 +21,8 @@ import (
 var q *PGMQ
 
 var (
-	testMsg1 = map[string]any{"foo": "bar1"}
-	testMsg2 = map[string]any{"foo": "bar2"}
+	testMsg1 = json.RawMessage(`{"foo": "bar1"}`)
+	testMsg2 = json.RawMessage(`{"foo": "bar2"}`)
 )
 
 func TestMain(m *testing.M) {
@@ -124,6 +125,45 @@ func TestSend(t *testing.T) {
 	require.EqualValues(t, 2, id)
 }
 
+func TestSendAMarshalledStruct(t *testing.T) {
+	type A struct {
+		Val int `json:"val"`
+	}
+
+	a := A{3}
+	b, err := json.Marshal(a)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	queue := t.Name()
+
+	err = q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	_, err = q.Send(ctx, queue, b)
+	require.NoError(t, err)
+
+	msg, err := q.Read(ctx, queue, 0)
+	require.NoError(t, err)
+
+	var aa A
+	err = json.Unmarshal(msg.Message, &aa)
+	require.NoError(t, err)
+
+	require.EqualValues(t, a, aa)
+}
+
+func TestSendInvalidJSONFails(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	_, err = q.Send(ctx, queue, json.RawMessage(`{"foo":}`))
+	require.Error(t, err)
+}
+
 func TestSendBatch(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
@@ -131,7 +171,7 @@ func TestSendBatch(t *testing.T) {
 	err := q.CreateQueue(ctx, queue)
 	require.NoError(t, err)
 
-	ids, err := q.SendBatch(ctx, queue, []map[string]any{testMsg1, testMsg2})
+	ids, err := q.SendBatch(ctx, queue, []json.RawMessage{testMsg1, testMsg2})
 	require.NoError(t, err)
 	require.Equal(t, []int64{1, 2}, ids)
 }
@@ -174,7 +214,7 @@ func TestReadBatch(t *testing.T) {
 	err := q.CreateQueue(ctx, queue)
 	require.NoError(t, err)
 
-	_, err = q.SendBatch(ctx, queue, []map[string]any{testMsg1, testMsg2})
+	_, err = q.SendBatch(ctx, queue, []json.RawMessage{testMsg1, testMsg2})
 	require.NoError(t, err)
 
 	time.Sleep(time.Second)
@@ -264,7 +304,7 @@ func TestArchiveBatch(t *testing.T) {
 	err := q.CreateQueue(ctx, queue)
 	require.NoError(t, err)
 
-	ids, err := q.SendBatch(ctx, queue, []map[string]any{testMsg1, testMsg2})
+	ids, err := q.SendBatch(ctx, queue, []json.RawMessage{testMsg1, testMsg2})
 	require.NoError(t, err)
 
 	archived, err := q.ArchiveBatch(ctx, queue, ids)
@@ -318,7 +358,7 @@ func TestDeleteBatch(t *testing.T) {
 	err := q.CreateQueue(ctx, queue)
 	require.NoError(t, err)
 
-	ids, err := q.SendBatch(ctx, queue, []map[string]any{testMsg1, testMsg2})
+	ids, err := q.SendBatch(ctx, queue, []json.RawMessage{testMsg1, testMsg2})
 	require.NoError(t, err)
 
 	deleted, err := q.DeleteBatch(ctx, queue, ids)
@@ -372,7 +412,7 @@ func TestErrorCases(t *testing.T) {
 
 	t.Run("sendBatchError", func(t *testing.T) {
 		mockDB.EXPECT().Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3)", queue, gomock.Any(), 0).Return(nil, testErr)
-		ids, err := q.SendBatch(ctx, queue, []map[string]any{testMsg1})
+		ids, err := q.SendBatch(ctx, queue, []json.RawMessage{testMsg1})
 		require.Nil(t, ids)
 		require.ErrorContains(t, err, "postgres error")
 	})

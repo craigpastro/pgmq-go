@@ -42,7 +42,7 @@ func main() {
         panic(err)
     }
 
-    id, err := q.Send(ctx, "my_queue", map[string]any{"foo": "bar"})
+    id, err := q.Send(ctx, "my_queue", json.RawMessage(`{"foo": "bar"}`))
     if err != nil {
         panic(err)
     }
