@@ -27,6 +27,7 @@ type Message struct {
 }
 
 type DB interface {
+	Ping(ctx context.Context) error
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
@@ -51,29 +52,25 @@ func New(ctx context.Context, connString string) (*PGMQ, error) {
 		return nil, fmt.Errorf("error creating pool: %w", err)
 	}
 
-	err = pool.Ping(ctx)
-	if err != nil {
+	return NewFromDB(ctx, pool)
+}
+
+// NewFromDB is a bring your own DB version of New. Given an implementation
+// of DB, it will call Ping to ensure the connection has been established,
+// then create the PGMQ extension if it does not already exist.
+func NewFromDB(ctx context.Context, db DB) (*PGMQ, error) {
+	if err := db.Ping(ctx); err != nil {
 		return nil, err
 	}
 
-	_, err = pool.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS pgmq CASCADE")
+	_, err := db.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS pgmq CASCADE")
 	if err != nil {
 		return nil, fmt.Errorf("error creating pgmq extension: %w", err)
 	}
 
 	return &PGMQ{
-		db: pool,
+		db: db,
 	}, nil
-}
-
-// MustNew is similar to New, but panics if it encounters an error.
-func MustNew(ctx context.Context, connString string) *PGMQ {
-	q, err := New(ctx, connString)
-	if err != nil {
-		panic(err)
-	}
-
-	return q
 }
 
 // Close closes the underlying connection pool.
