@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/craigpastro/retrier v0.1.2
 	github.com/jackc/pgx/v5 v5.5.2
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go v0.27.0
 	go.uber.org/mock v0.3.0
 )
