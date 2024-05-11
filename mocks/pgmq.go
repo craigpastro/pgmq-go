@@ -5,6 +5,7 @@
 //
 //	mockgen --source=pgmq.go --destination mocks/pgmq.go --package=mocks
 //
+
 // Package mocks is a generated GoMock package.
 package mocks
 

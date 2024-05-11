@@ -5,6 +5,7 @@
 //
 //	mockgen --destination mocks/row.go --package=mocks --build_flags=--mod=mod github.com/jackc/pgx/v5 Row
 //
+
 // Package mocks is a generated GoMock package.
 package mocks
 
