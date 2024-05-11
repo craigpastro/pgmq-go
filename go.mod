@@ -3,7 +3,7 @@ module github.com/craigpastro/pgmq-go
 go 1.20
 
 require (
-	github.com/craigpastro/retrier v0.1.2
+	github.com/avast/retry-go/v4 v4.6.0
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go v0.31.0

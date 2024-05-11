@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/avast/retry-go/v4"
 	"github.com/craigpastro/pgmq-go/mocks"
-	"github.com/craigpastro/retrier"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -55,9 +55,9 @@ func TestMain(m *testing.M) {
 
 	connString := fmt.Sprintf("postgres://postgres:password@%s:%s/postgres", host, port.Port())
 
-	q, err = retrier.DoWithData(func() (*PGMQ, error) {
+	q, err = retry.DoWithData(func() (*PGMQ, error) {
 		return New(ctx, connString)
-	}, retrier.NewExponentialBackoff())
+	})
 	if err != nil {
 		panic(err)
 	}
