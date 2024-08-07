@@ -70,6 +70,11 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func TestPing(t *testing.T) {
+	err := q.Ping(context.Background())
+	require.NoError(t, err)
+}
+
 func TestCreateAndDropQueue(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
