@@ -78,6 +78,11 @@ func (p *PGMQ) Close() {
 	p.db.Close()
 }
 
+// Ping calls the underlying Ping function of the DB interface.
+func (p *PGMQ) Ping(ctx context.Context) error {
+	return p.db.Ping(ctx)
+}
+
 // CreateQueue creates a new queue. This sets up the queue's tables, indexes,
 // and metadata.
 func (p *PGMQ) CreateQueue(ctx context.Context, queue string) error {
