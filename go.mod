@@ -1,15 +1,14 @@
 module github.com/craigpastro/pgmq-go
 
 go 1.21
-
-toolchain go1.21.6
+toolchain go1.22.5
 
 require (
 	github.com/avast/retry-go/v4 v4.6.0
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go v0.33.0
-	go.uber.org/mock v0.4.0
+	go.uber.org/mock v0.5.0
 )
 
 require (
