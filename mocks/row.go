@@ -19,6 +19,7 @@ import (
 type MockRow struct {
 	ctrl     *gomock.Controller
 	recorder *MockRowMockRecorder
+	isgomock struct{}
 }
 
 // MockRowMockRecorder is the mock recorder for MockRow.
@@ -39,10 +40,10 @@ func (m *MockRow) EXPECT() *MockRowMockRecorder {
 }
 
 // Scan mocks base method.
-func (m *MockRow) Scan(arg0 ...any) error {
+func (m *MockRow) Scan(dest ...any) error {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range arg0 {
+	for _, a := range dest {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Scan", varargs...)
@@ -51,7 +52,7 @@ func (m *MockRow) Scan(arg0 ...any) error {
 }
 
 // Scan indicates an expected call of Scan.
-func (mr *MockRowMockRecorder) Scan(arg0 ...any) *gomock.Call {
+func (mr *MockRowMockRecorder) Scan(dest ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockRow)(nil).Scan), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scan", reflect.TypeOf((*MockRow)(nil).Scan), dest...)
 }
