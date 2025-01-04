@@ -9,7 +9,7 @@ A Go (Golang) client for
 [Postgres Message Queue](https://github.com/tembo-io/pgmq) (PGMQ). Based loosely
 on the [Rust client](https://github.com/tembo-io/pgmq/tree/main/pgmq-rs).
 
-`pgmq-go` works with [pgx](https://github.com/jackc/pgx). The second argument 
+`pgmq-go` works with [pgx](https://github.com/jackc/pgx). The second argument of most functions can take a `pgx.Conn`, `pgx.Pool`, or `pgx.Tx`.
 
 ## Usage
 

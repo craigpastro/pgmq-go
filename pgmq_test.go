@@ -137,6 +137,9 @@ func TestSend(t *testing.T) {
 }
 
 func TestSendAMarshalledStruct(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
 	type A struct {
 		Val int `json:"val"`
 	}
@@ -144,9 +147,6 @@ func TestSendAMarshalledStruct(t *testing.T) {
 	a := A{3}
 	b, err := json.Marshal(a)
 	require.NoError(t, err)
-
-	ctx := context.Background()
-	queue := t.Name()
 
 	err = CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
