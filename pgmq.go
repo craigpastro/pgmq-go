@@ -27,24 +27,16 @@ type Message struct {
 }
 
 type DB interface {
-	Ping(ctx context.Context) error
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-	Close()
+	Exec(ctx context.Context, query string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, query string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, query string, args ...any) pgx.Row
 }
 
-type PGMQ struct {
-	db DB
-}
-
-// New uses the connString to attempt to establish a connection to Postgres.
-// Once a connetion is established it will create the PGMQ extension if it
-// does not already exist.
-func New(ctx context.Context, connString string) (*PGMQ, error) {
+// NewPgxPool is a convenience function for creating a new *pgxpool.Pool.
+func NewPgxPool(ctx context.Context, connString string) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(connString)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing connection string: %w", err)
+		return nil, err
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
@@ -52,41 +44,23 @@ func New(ctx context.Context, connString string) (*PGMQ, error) {
 		return nil, fmt.Errorf("error creating pool: %w", err)
 	}
 
-	return NewFromDB(ctx, pool)
+	return pool, nil
 }
 
-// NewFromDB is a bring your own DB version of New. Given an implementation
-// of DB, it will call Ping to ensure the connection has been established,
-// then create the PGMQ extension if it does not already exist.
-func NewFromDB(ctx context.Context, db DB) (*PGMQ, error) {
-	if err := db.Ping(ctx); err != nil {
-		return nil, err
-	}
-
+// CreatePGMQExtension will create the PGMQ extension using the provided DB.
+func CreatePGMQExtension(ctx context.Context, db DB) error {
 	_, err := db.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS pgmq CASCADE")
 	if err != nil {
-		return nil, fmt.Errorf("error creating pgmq extension: %w", err)
+		return fmt.Errorf("error creating pgmq extension: %w", err)
 	}
 
-	return &PGMQ{
-		db: db,
-	}, nil
-}
-
-// Close closes the underlying connection pool.
-func (p *PGMQ) Close() {
-	p.db.Close()
-}
-
-// Ping calls the underlying Ping function of the DB interface.
-func (p *PGMQ) Ping(ctx context.Context) error {
-	return p.db.Ping(ctx)
+	return nil
 }
 
 // CreateQueue creates a new queue. This sets up the queue's tables, indexes,
 // and metadata.
-func (p *PGMQ) CreateQueue(ctx context.Context, queue string) error {
-	_, err := p.db.Exec(ctx, "SELECT pgmq.create($1)", queue)
+func CreateQueue(ctx context.Context, db DB, queue string) error {
+	_, err := db.Exec(ctx, "SELECT pgmq.create($1)", queue)
 	if err != nil {
 		return wrapPostgresError(err)
 	}
@@ -97,8 +71,8 @@ func (p *PGMQ) CreateQueue(ctx context.Context, queue string) error {
 // CreateUnloggedQueue creates a new unlogged queue, which uses an unlogged
 // table under the hood. This sets up the queue's tables, indexes, and
 // metadata.
-func (p *PGMQ) CreateUnloggedQueue(ctx context.Context, queue string) error {
-	_, err := p.db.Exec(ctx, "SELECT pgmq.create_unlogged($1)", queue)
+func CreateUnloggedQueue(ctx context.Context, db DB, queue string) error {
+	_, err := db.Exec(ctx, "SELECT pgmq.create_unlogged($1)", queue)
 	if err != nil {
 		return wrapPostgresError(err)
 	}
@@ -108,8 +82,8 @@ func (p *PGMQ) CreateUnloggedQueue(ctx context.Context, queue string) error {
 
 // DropQueue deletes the given queue. It deletes the queue's tables, indices,
 // and metadata. It will return an error if the queue does not exist.
-func (p *PGMQ) DropQueue(ctx context.Context, queue string) error {
-	_, err := p.db.Exec(ctx, "SELECT pgmq.drop_queue($1)", queue)
+func DropQueue(ctx context.Context, db DB, queue string) error {
+	_, err := db.Exec(ctx, "SELECT pgmq.drop_queue($1)", queue)
 	if err != nil {
 		return wrapPostgresError(err)
 	}
@@ -119,15 +93,15 @@ func (p *PGMQ) DropQueue(ctx context.Context, queue string) error {
 
 // Send sends a single message to a queue. The message id, unique to the
 // queue, is returned.
-func (p *PGMQ) Send(ctx context.Context, queue string, msg json.RawMessage) (int64, error) {
-	return p.SendWithDelay(ctx, queue, msg, 0)
+func Send(ctx context.Context, db DB, queue string, msg json.RawMessage) (int64, error) {
+	return SendWithDelay(ctx, db, queue, msg, 0)
 }
 
 // SendWithDelay sends a single message to a queue with a delay. The delay
 // is specified in seconds. The message id, unique to the queue, is returned.
-func (p *PGMQ) SendWithDelay(ctx context.Context, queue string, msg json.RawMessage, delay int) (int64, error) {
+func SendWithDelay(ctx context.Context, db DB, queue string, msg json.RawMessage, delay int) (int64, error) {
 	var msgID int64
-	err := p.db.
+	err := db.
 		QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3)", queue, msg, delay).
 		Scan(&msgID)
 	if err != nil {
@@ -139,15 +113,15 @@ func (p *PGMQ) SendWithDelay(ctx context.Context, queue string, msg json.RawMess
 
 // SendBatch sends a batch of messages to a queue. The message ids, unique to
 // the queue, are returned.
-func (p *PGMQ) SendBatch(ctx context.Context, queue string, msgs []json.RawMessage) ([]int64, error) {
-	return p.SendBatchWithDelay(ctx, queue, msgs, 0)
+func SendBatch(ctx context.Context, db DB, queue string, msgs []json.RawMessage) ([]int64, error) {
+	return SendBatchWithDelay(ctx, db, queue, msgs, 0)
 }
 
 // SendBatchWithDelay sends a batch of messages to a queue with a delay. The
 // delay is specified in seconds. The message ids, unique to the queue, are
 // returned.
-func (p *PGMQ) SendBatchWithDelay(ctx context.Context, queue string, msgs []json.RawMessage, delay int) ([]int64, error) {
-	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3)", queue, msgs, delay)
+func SendBatchWithDelay(ctx context.Context, db DB, queue string, msgs []json.RawMessage, delay int) ([]int64, error) {
+	rows, err := db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3)", queue, msgs, delay)
 	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
@@ -170,13 +144,13 @@ func (p *PGMQ) SendBatchWithDelay(ctx context.Context, queue string, msgs []json
 // messages are invisible, an ErrNoRows errors is returned. If a message is
 // returned, it is made invisible for the duration of the visibility timeout
 // (vt) in seconds.
-func (p *PGMQ) Read(ctx context.Context, queue string, vt int64) (*Message, error) {
+func Read(ctx context.Context, db DB, queue string, vt int64) (*Message, error) {
 	if vt == 0 {
 		vt = vtDefault
 	}
 
 	var msg Message
-	err := p.db.
+	err := db.
 		QueryRow(ctx, "SELECT * FROM pgmq.read($1, $2, $3)", queue, vt, 1).
 		Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
 	if err != nil {
@@ -193,12 +167,12 @@ func (p *PGMQ) Read(ctx context.Context, queue string, vt int64) (*Message, erro
 // messages that are returned are made invisible for the duration of the
 // visibility timeout (vt) in seconds. If vt is 0 it will be set to the
 // default value, vtDefault.
-func (p *PGMQ) ReadBatch(ctx context.Context, queue string, vt int64, numMsgs int64) ([]*Message, error) {
+func ReadBatch(ctx context.Context, db DB, queue string, vt int64, numMsgs int64) ([]*Message, error) {
 	if vt == 0 {
 		vt = vtDefault
 	}
 
-	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.read($1, $2, $3)", queue, vt, numMsgs)
+	rows, err := db.Query(ctx, "SELECT * FROM pgmq.read($1, $2, $3)", queue, vt, numMsgs)
 	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
@@ -221,9 +195,9 @@ func (p *PGMQ) ReadBatch(ctx context.Context, queue string, vt int64, numMsgs in
 // Similar to Read and ReadBatch if no messages are available an ErrNoRows is
 // returned. Unlike these methods, the visibility timeout does not apply.
 // This is because the message is immediately deleted.
-func (p *PGMQ) Pop(ctx context.Context, queue string) (*Message, error) {
+func Pop(ctx context.Context, db DB, queue string) (*Message, error) {
 	var msg Message
-	err := p.db.
+	err := db.
 		QueryRow(ctx, "SELECT * FROM pgmq.pop($1)", queue).
 		Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
 	if err != nil {
@@ -240,9 +214,9 @@ func (p *PGMQ) Pop(ctx context.Context, queue string) (*Message, error) {
 // id. View messages on the archive table with sql:
 //
 //	SELECT * FROM pgmq.a_<queue_name>;
-func (p *PGMQ) Archive(ctx context.Context, queue string, msgID int64) (bool, error) {
+func Archive(ctx context.Context, db DB, queue string, msgID int64) (bool, error) {
 	var archived bool
-	err := p.db.QueryRow(ctx, "SELECT pgmq.archive($1, $2::bigint)", queue, msgID).Scan(&archived)
+	err := db.QueryRow(ctx, "SELECT pgmq.archive($1, $2::bigint)", queue, msgID).Scan(&archived)
 	if err != nil {
 		return false, wrapPostgresError(err)
 	}
@@ -254,8 +228,8 @@ func (p *PGMQ) Archive(ctx context.Context, queue string, msgID int64) (bool, er
 // table by their ids. View messages on the archive table with sql:
 //
 //	SELECT * FROM pgmq.a_<queue_name>;
-func (p *PGMQ) ArchiveBatch(ctx context.Context, queue string, msgIDs []int64) ([]int64, error) {
-	rows, err := p.db.Query(ctx, "SELECT pgmq.archive($1, $2::bigint[])", queue, msgIDs)
+func ArchiveBatch(ctx context.Context, db DB, queue string, msgIDs []int64) ([]int64, error) {
+	rows, err := db.Query(ctx, "SELECT pgmq.archive($1, $2::bigint[])", queue, msgIDs)
 	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
@@ -276,9 +250,9 @@ func (p *PGMQ) ArchiveBatch(ctx context.Context, queue string, msgIDs []int64) (
 // Delete deletes a message from the queue by its id. This is a permanent
 // delete and cannot be undone. If you want to retain a log of the message,
 // use the Archive method.
-func (p *PGMQ) Delete(ctx context.Context, queue string, msgID int64) (bool, error) {
+func Delete(ctx context.Context, db DB, queue string, msgID int64) (bool, error) {
 	var deleted bool
-	err := p.db.QueryRow(ctx, "SELECT pgmq.delete($1, $2::bigint)", queue, msgID).Scan(&deleted)
+	err := db.QueryRow(ctx, "SELECT pgmq.delete($1, $2::bigint)", queue, msgID).Scan(&deleted)
 	if err != nil {
 		return false, wrapPostgresError(err)
 	}
@@ -289,8 +263,8 @@ func (p *PGMQ) Delete(ctx context.Context, queue string, msgID int64) (bool, err
 // DeleteBatch deletes a batch of messages from the queue by their ids. This
 // is a permanent delete and cannot be undone. If you want to retain a log of
 // the messages, use the ArchiveBatch method.
-func (p *PGMQ) DeleteBatch(ctx context.Context, queue string, msgIDs []int64) ([]int64, error) {
-	rows, err := p.db.Query(ctx, "SELECT pgmq.delete($1, $2::bigint[])", queue, msgIDs)
+func DeleteBatch(ctx context.Context, db DB, queue string, msgIDs []int64) ([]int64, error) {
+	rows, err := db.Query(ctx, "SELECT pgmq.delete($1, $2::bigint[])", queue, msgIDs)
 	if err != nil {
 		return nil, wrapPostgresError(err)
 	}

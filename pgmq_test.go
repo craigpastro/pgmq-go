@@ -12,13 +12,14 @@ import (
 	"github.com/avast/retry-go/v4"
 	"github.com/craigpastro/pgmq-go/mocks"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/mock/gomock"
 )
 
-var q *PGMQ
+var pool *pgxpool.Pool
 
 var (
 	testMsg1 = json.RawMessage(`{"foo": "bar1"}`)
@@ -55,8 +56,18 @@ func TestMain(m *testing.M) {
 
 	connString := fmt.Sprintf("postgres://postgres:password@%s:%s/postgres", host, port.Port())
 
-	q, err = retry.DoWithData(func() (*PGMQ, error) {
-		return New(ctx, connString)
+	pool, err = retry.DoWithData(func() (*pgxpool.Pool, error) {
+		pool, err := NewPgxPool(ctx, connString)
+		if err != nil {
+			return nil, fmt.Errorf("error creating pool: %w", err)
+		}
+
+		err = CreatePGMQExtension(ctx, pool)
+		if err != nil {
+			return nil, err
+		}
+
+		return pool, nil
 	})
 	if err != nil {
 		panic(err)
@@ -64,28 +75,23 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
-	q.Close()
+	pool.Close()
 	_ = container.Terminate(context.Background())
 
 	os.Exit(code)
-}
-
-func TestPing(t *testing.T) {
-	err := q.Ping(context.Background())
-	require.NoError(t, err)
 }
 
 func TestCreateAndDropQueue(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	err = q.DropQueue(ctx, queue)
+	err = DropQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	_, err = q.Send(ctx, queue, testMsg1)
+	_, err = Send(ctx, pool, queue, testMsg1)
 	require.Error(t, err)
 }
 
@@ -93,7 +99,7 @@ func TestDropQueueWhichDoesNotExist(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.DropQueue(ctx, queue)
+	err := DropQueue(ctx, pool, queue)
 	require.Error(t, err)
 }
 
@@ -101,16 +107,16 @@ func TestCreateUnloggedAndDropQueue(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateUnloggedQueue(ctx, queue)
+	err := CreateUnloggedQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	_, err = q.Send(ctx, queue, testMsg1)
+	_, err = Send(ctx, pool, queue, testMsg1)
 	require.NoError(t, err)
 
-	err = q.DropQueue(ctx, queue)
+	err = DropQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	_, err = q.Send(ctx, queue, testMsg1)
+	_, err = Send(ctx, pool, queue, testMsg1)
 	require.Error(t, err)
 }
 
@@ -118,14 +124,14 @@ func TestSend(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	id, err := q.Send(ctx, queue, testMsg1)
+	id, err := Send(ctx, pool, queue, testMsg1)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, id)
 
-	id, err = q.Send(ctx, queue, testMsg2)
+	id, err = Send(ctx, pool, queue, testMsg2)
 	require.NoError(t, err)
 	require.EqualValues(t, 2, id)
 }
@@ -142,13 +148,13 @@ func TestSendAMarshalledStruct(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err = q.CreateQueue(ctx, queue)
+	err = CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	_, err = q.Send(ctx, queue, b)
+	_, err = Send(ctx, pool, queue, b)
 	require.NoError(t, err)
 
-	msg, err := q.Read(ctx, queue, 0)
+	msg, err := Read(ctx, pool, queue, 0)
 	require.NoError(t, err)
 
 	var aa A
@@ -162,10 +168,10 @@ func TestSendInvalidJSONFails(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	_, err = q.Send(ctx, queue, json.RawMessage(`{"foo":}`))
+	_, err = Send(ctx, pool, queue, json.RawMessage(`{"foo":}`))
 	require.Error(t, err)
 }
 
@@ -173,10 +179,10 @@ func TestSendBatch(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	ids, err := q.SendBatch(ctx, queue, []json.RawMessage{testMsg1, testMsg2})
+	ids, err := SendBatch(ctx, pool, queue, []json.RawMessage{testMsg1, testMsg2})
 	require.NoError(t, err)
 	require.Equal(t, []int64{1, 2}, ids)
 }
@@ -185,30 +191,64 @@ func TestRead(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	id, err := q.Send(ctx, queue, testMsg1)
+	id, err := Send(ctx, pool, queue, testMsg1)
 	require.NoError(t, err)
 
-	msg, err := q.Read(ctx, queue, 0)
+	msg, err := Read(ctx, pool, queue, 0)
 	require.NoError(t, err)
 	require.Equal(t, testMsg1, msg.Message)
 	require.Equal(t, id, msg.MsgID)
 
 	// Visibility timeout will still be in effect.
-	_, err = q.Read(ctx, queue, 0)
+	_, err = Read(ctx, pool, queue, 0)
 	require.ErrorIs(t, err, ErrNoRows)
+}
+
+func TestReadInTx(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := CreateQueue(ctx, pool, queue)
+	require.NoError(t, err)
+
+	tx, err := pool.Begin(ctx)
+	require.NoError(t, err)
+
+	id, err := Send(ctx, tx, queue, testMsg1)
+	require.NoError(t, err)
+
+	// Can't read outside of the transaction.
+	_, err = Read(ctx, pool, queue, 0)
+	require.ErrorIs(t, err, ErrNoRows)
+
+	// Can read in the same transaction with no problem.
+	msg, err := Read(ctx, tx, queue, 1)
+	require.NoError(t, err)
+	require.Equal(t, testMsg1, msg.Message)
+	require.Equal(t, id, msg.MsgID)
+
+	err = tx.Commit(ctx)
+	require.NoError(t, err)
+
+	// After the visibility timeout we can read using the pool.
+	time.Sleep(time.Second)
+	msg, err = Read(ctx, pool, queue, 0)
+	require.NoError(t, err)
+	require.Equal(t, testMsg1, msg.Message)
+	require.Equal(t, id, msg.MsgID)
 }
 
 func TestReadEmptyQueueReturnsNoRows(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	_, err = q.Read(ctx, queue, 0)
+	_, err = Read(ctx, pool, queue, 0)
 	require.ErrorIs(t, err, ErrNoRows)
 }
 
@@ -216,14 +256,14 @@ func TestReadBatch(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	_, err = q.SendBatch(ctx, queue, []json.RawMessage{testMsg1, testMsg2})
+	_, err = SendBatch(ctx, pool, queue, []json.RawMessage{testMsg1, testMsg2})
 	require.NoError(t, err)
 
 	time.Sleep(time.Second)
-	msgs, err := q.ReadBatch(ctx, queue, 0, 5)
+	msgs, err := ReadBatch(ctx, pool, queue, 0, 5)
 	require.NoError(t, err)
 	require.Len(t, msgs, 2)
 
@@ -231,7 +271,7 @@ func TestReadBatch(t *testing.T) {
 	require.Equal(t, testMsg2, msgs[1].Message)
 
 	// Visibility timeout will still be in effect.
-	msgs, err = q.ReadBatch(ctx, queue, 0, 5)
+	msgs, err = ReadBatch(ctx, pool, queue, 0, 5)
 	require.NoError(t, err)
 	require.Empty(t, msgs)
 }
@@ -240,18 +280,18 @@ func TestPop(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	id, err := q.Send(ctx, queue, testMsg1)
+	id, err := Send(ctx, pool, queue, testMsg1)
 	require.NoError(t, err)
 
-	msg, err := q.Pop(ctx, queue)
+	msg, err := Pop(ctx, pool, queue)
 	require.NoError(t, err)
 	require.Equal(t, testMsg1, msg.Message)
 	require.Equal(t, id, msg.MsgID)
 
-	_, err = q.Read(ctx, queue, 0)
+	_, err = Read(ctx, pool, queue, 0)
 	require.ErrorIs(t, err, ErrNoRows)
 }
 
@@ -259,10 +299,10 @@ func TestPopEmptyQueueReturnsNoRows(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	_, err = q.Pop(ctx, queue)
+	_, err = Pop(ctx, pool, queue)
 	require.ErrorIs(t, err, ErrNoRows)
 }
 
@@ -270,23 +310,23 @@ func TestArchive(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	id, err := q.Send(ctx, queue, testMsg1)
+	id, err := Send(ctx, pool, queue, testMsg1)
 	require.NoError(t, err)
 
-	archived, err := q.Archive(ctx, queue, id)
+	archived, err := Archive(ctx, pool, queue, id)
 	require.NoError(t, err)
 	require.True(t, archived)
 
 	// Let's just check that something landed in the archive table.
 	stmt := fmt.Sprintf("SELECT * FROM pgmq.a_%s", queue)
-	tag, err := q.db.Exec(ctx, stmt)
+	tag, err := pool.Exec(ctx, stmt)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, tag.RowsAffected())
 
-	_, err = q.Read(ctx, queue, 0)
+	_, err = Read(ctx, pool, queue, 0)
 	require.ErrorIs(t, err, ErrNoRows)
 }
 
@@ -294,10 +334,10 @@ func TestArchiveNotExist(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	archived, err := q.Archive(ctx, queue, 100)
+	archived, err := Archive(ctx, pool, queue, 100)
 	require.NoError(t, err)
 	require.False(t, archived)
 }
@@ -306,23 +346,23 @@ func TestArchiveBatch(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	ids, err := q.SendBatch(ctx, queue, []json.RawMessage{testMsg1, testMsg2})
+	ids, err := SendBatch(ctx, pool, queue, []json.RawMessage{testMsg1, testMsg2})
 	require.NoError(t, err)
 
-	archived, err := q.ArchiveBatch(ctx, queue, ids)
+	archived, err := ArchiveBatch(ctx, pool, queue, ids)
 	require.NoError(t, err)
 	require.Equal(t, ids, archived)
 
 	// Let's check that the two messages landed in the archive table.
 	stmt := fmt.Sprintf("SELECT * FROM pgmq.a_%s", queue)
-	tag, err := q.db.Exec(ctx, stmt)
+	tag, err := pool.Exec(ctx, stmt)
 	require.NoError(t, err)
 	require.EqualValues(t, 2, tag.RowsAffected())
 
-	_, err = q.Read(ctx, queue, 0)
+	_, err = Read(ctx, pool, queue, 0)
 	require.ErrorIs(t, err, ErrNoRows)
 }
 
@@ -330,17 +370,17 @@ func TestDelete(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	id, err := q.Send(ctx, queue, testMsg1)
+	id, err := Send(ctx, pool, queue, testMsg1)
 	require.NoError(t, err)
 
-	deleted, err := q.Delete(ctx, queue, id)
+	deleted, err := Delete(ctx, pool, queue, id)
 	require.NoError(t, err)
 	require.True(t, deleted)
 
-	_, err = q.Read(ctx, queue, 0)
+	_, err = Read(ctx, pool, queue, 0)
 	require.ErrorIs(t, err, ErrNoRows)
 }
 
@@ -348,10 +388,10 @@ func TestDeleteNotExist(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	deleted, err := q.Delete(ctx, queue, 100)
+	deleted, err := Delete(ctx, pool, queue, 100)
 	require.NoError(t, err)
 	require.False(t, deleted)
 }
@@ -360,17 +400,17 @@ func TestDeleteBatch(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
 
-	err := q.CreateQueue(ctx, queue)
+	err := CreateQueue(ctx, pool, queue)
 	require.NoError(t, err)
 
-	ids, err := q.SendBatch(ctx, queue, []json.RawMessage{testMsg1, testMsg2})
+	ids, err := SendBatch(ctx, pool, queue, []json.RawMessage{testMsg1, testMsg2})
 	require.NoError(t, err)
 
-	deleted, err := q.DeleteBatch(ctx, queue, ids)
+	deleted, err := DeleteBatch(ctx, pool, queue, ids)
 	require.NoError(t, err)
 	require.EqualValues(t, ids, deleted)
 
-	_, err = q.Read(ctx, queue, 0)
+	_, err = Read(ctx, pool, queue, 0)
 	require.ErrorIs(t, err, ErrNoRows)
 }
 
@@ -385,39 +425,38 @@ func TestErrorCases(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockDB := mocks.NewMockDB(ctrl)
-	q := PGMQ{db: mockDB}
 
 	mockRow := mocks.NewMockRow(ctrl)
 
 	t.Run("createQueueError", func(t *testing.T) {
 		mockDB.EXPECT().Exec(ctx, "SELECT pgmq.create($1)", queue).Return(cmdTag, testErr)
-		err := q.CreateQueue(ctx, queue)
+		err := CreateQueue(ctx, mockDB, queue)
 		require.ErrorContains(t, err, "postgres error")
 	})
 
 	t.Run("createUnloggedQueueError", func(t *testing.T) {
 		mockDB.EXPECT().Exec(ctx, "SELECT pgmq.create_unlogged($1)", queue).Return(cmdTag, testErr)
-		err := q.CreateUnloggedQueue(ctx, queue)
+		err := CreateUnloggedQueue(ctx, mockDB, queue)
 		require.ErrorContains(t, err, "postgres error")
 	})
 
 	t.Run("dropQueueError", func(t *testing.T) {
 		mockDB.EXPECT().Exec(ctx, "SELECT pgmq.drop_queue($1)", queue).Return(cmdTag, testErr)
-		err := q.DropQueue(ctx, queue)
+		err := DropQueue(ctx, mockDB, queue)
 		require.ErrorContains(t, err, "postgres error")
 	})
 
 	t.Run("sendError", func(t *testing.T) {
 		mockDB.EXPECT().QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3)", queue, gomock.Any(), 0).Return(mockRow)
 		mockRow.EXPECT().Scan(gomock.Any()).Return(testErr)
-		id, err := q.Send(ctx, queue, testMsg1)
+		id, err := Send(ctx, mockDB, queue, testMsg1)
 		require.EqualValues(t, 0, id)
 		require.ErrorContains(t, err, "postgres error")
 	})
 
 	t.Run("sendBatchError", func(t *testing.T) {
 		mockDB.EXPECT().Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3)", queue, gomock.Any(), 0).Return(nil, testErr)
-		ids, err := q.SendBatch(ctx, queue, []json.RawMessage{testMsg1})
+		ids, err := SendBatch(ctx, mockDB, queue, []json.RawMessage{testMsg1})
 		require.Nil(t, ids)
 		require.ErrorContains(t, err, "postgres error")
 	})
@@ -425,7 +464,7 @@ func TestErrorCases(t *testing.T) {
 	t.Run("readError", func(t *testing.T) {
 		mockDB.EXPECT().QueryRow(ctx, "SELECT * FROM pgmq.read($1, $2, $3)", queue, gomock.Any(), gomock.Any()).Return(mockRow)
 		mockRow.EXPECT().Scan(gomock.Any()).Return(testErr)
-		msg, err := q.Read(ctx, queue, 0)
+		msg, err := Read(ctx, mockDB, queue, 0)
 		require.Nil(t, msg)
 		require.ErrorContains(t, err, "postgres error")
 	})
@@ -433,7 +472,7 @@ func TestErrorCases(t *testing.T) {
 	t.Run("popError", func(t *testing.T) {
 		mockDB.EXPECT().QueryRow(ctx, "SELECT * FROM pgmq.pop($1)", queue).Return(mockRow)
 		mockRow.EXPECT().Scan(gomock.Any()).Return(testErr)
-		msg, err := q.Pop(ctx, queue)
+		msg, err := Pop(ctx, mockDB, queue)
 		require.Nil(t, msg)
 		require.ErrorContains(t, err, "postgres error")
 	})
@@ -441,14 +480,14 @@ func TestErrorCases(t *testing.T) {
 	t.Run("archiveError", func(t *testing.T) {
 		mockDB.EXPECT().QueryRow(ctx, "SELECT pgmq.archive($1, $2::bigint)", queue, gomock.Any()).Return(mockRow)
 		mockRow.EXPECT().Scan(gomock.Any()).Return(testErr)
-		archived, err := q.Archive(ctx, queue, 7)
+		archived, err := Archive(ctx, mockDB, queue, 7)
 		require.False(t, archived)
 		require.ErrorContains(t, err, "postgres error")
 	})
 
 	t.Run("archiveBatchError", func(t *testing.T) {
 		mockDB.EXPECT().Query(ctx, "SELECT pgmq.archive($1, $2::bigint[])", queue, gomock.Any()).Return(nil, testErr)
-		archived, err := q.ArchiveBatch(ctx, queue, []int64{7})
+		archived, err := ArchiveBatch(ctx, mockDB, queue, []int64{7})
 		require.Nil(t, archived)
 		require.ErrorContains(t, err, "postgres error")
 	})
@@ -456,14 +495,14 @@ func TestErrorCases(t *testing.T) {
 	t.Run("deleteError", func(t *testing.T) {
 		mockDB.EXPECT().QueryRow(ctx, "SELECT pgmq.delete($1, $2::bigint)", queue, gomock.Any()).Return(mockRow)
 		mockRow.EXPECT().Scan(gomock.Any()).Return(testErr)
-		deleted, err := q.Delete(ctx, queue, 7)
+		deleted, err := Delete(ctx, mockDB, queue, 7)
 		require.False(t, deleted)
 		require.ErrorContains(t, err, "postgres error")
 	})
 
 	t.Run("deleteBatchError", func(t *testing.T) {
 		mockDB.EXPECT().Query(ctx, "SELECT pgmq.delete($1, $2::bigint[])", queue, gomock.Any()).Return(nil, testErr)
-		deleted, err := q.DeleteBatch(ctx, queue, []int64{7})
+		deleted, err := DeleteBatch(ctx, mockDB, queue, []int64{7})
 		require.Nil(t, deleted)
 		require.ErrorContains(t, err, "postgres error")
 	})
