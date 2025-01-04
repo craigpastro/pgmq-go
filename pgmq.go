@@ -36,7 +36,7 @@ type DB interface {
 func NewPgxPool(ctx context.Context, connString string) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(connString)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error parsing connection string: %w", err)
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
