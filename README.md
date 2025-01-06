@@ -44,7 +44,7 @@ func main() {
         panic(err)
     }
 
-    err := pgmq.CreateQueue(ctx, pool, "my_queue")
+    err = pgmq.CreateQueue(ctx, pool, "my_queue")
     if err != nil {
         panic(err)
     }
