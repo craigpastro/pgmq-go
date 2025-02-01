@@ -24,8 +24,8 @@ func (p *PGMQ) SendWithDelayTX(ctx context.Context, queue string, msg json.RawMe
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, 0, err
 	}
 
@@ -59,8 +59,8 @@ func (p *PGMQ) SendWithTxDelay(ctx context.Context, tx pgx.Tx, queue string, msg
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return 0, err
 	}
 
@@ -91,8 +91,8 @@ func (p *PGMQ) SendBatchWithDelayTX(ctx context.Context, queue string, msgs []js
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, nil, err
 	}
 
@@ -135,8 +135,8 @@ func (p *PGMQ) SendBatchWithTXDelay(ctx context.Context, tx pgx.Tx, queue string
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, err
 	}
 
@@ -168,8 +168,8 @@ func (p *PGMQ) ReadTX(ctx context.Context, queue string, vt int64) (tx pgx.Tx, _
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, nil, err
 	}
 
@@ -206,8 +206,8 @@ func (p *PGMQ) ReadWithTX(ctx context.Context, tx pgx.Tx, queue string, vt int64
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, err
 	}
 
@@ -238,8 +238,8 @@ func (p *PGMQ) ReadBatchTX(ctx context.Context, queue string, vt int64, numMsgs 
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, nil, err
 	}
 
@@ -279,8 +279,8 @@ func (p *PGMQ) ReadBatchWithTX(ctx context.Context, tx pgx.Tx, queue string, vt 
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, err
 	}
 
@@ -316,8 +316,8 @@ func (p *PGMQ) PopTX(ctx context.Context, queue string) (tx pgx.Tx, _ *Message, 
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, nil, err
 	}
 
@@ -349,8 +349,8 @@ func (p *PGMQ) PopWithTX(ctx context.Context, tx pgx.Tx, queue string) (_ *Messa
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, err
 	}
 
@@ -378,8 +378,8 @@ func (p *PGMQ) ArchiveTX(ctx context.Context, queue string, msgID int64) (tx pgx
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, false, err
 	}
 
@@ -408,8 +408,8 @@ func (p *PGMQ) ArchiveWithTX(ctx context.Context, tx pgx.Tx, queue string, msgID
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return false, err
 	}
 
@@ -433,8 +433,8 @@ func (p *PGMQ) ArchiveBatchTX(ctx context.Context, queue string, msgIDs []int64)
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, nil, err
 	}
 
@@ -471,8 +471,8 @@ func (p *PGMQ) ArchiveBatchWithTX(ctx context.Context, tx pgx.Tx, queue string, 
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, err
 	}
 
@@ -502,8 +502,8 @@ func (p *PGMQ) DeleteTX(ctx context.Context, queue string, msgID int64) (tx pgx.
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, false, err
 	}
 
@@ -529,8 +529,8 @@ func (p *PGMQ) DeleteWithTX(ctx context.Context, tx pgx.Tx, queue string, msgID 
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return false, err
 	}
 
@@ -551,8 +551,8 @@ func (p *PGMQ) DeleteBatchTX(ctx context.Context, queue string, msgIDs []int64) 
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, nil, err
 	}
 
@@ -587,8 +587,8 @@ func (p *PGMQ) DeleteBatchWithTX(ctx context.Context, tx pgx.Tx, queue string, m
 	p.ActiveOps.Add(1)
 	defer p.ActiveOps.Add(-1)
 
-	// make sure the PGMQ context was not canceled
-	if err = p.ctx.Err(); err != nil {
+	// make sure the contexts were not canceled
+	if err = errors.Join(p.ctx.Err(), ctx.Err()); err != nil {
 		return nil, err
 	}
 
