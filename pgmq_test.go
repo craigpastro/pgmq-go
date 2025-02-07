@@ -65,58 +65,72 @@ func TestSend(t *testing.T) {
 
 func TestSendAMarshalledStruct(t *testing.T) {
 	pg16.TestSendAMarshalledStruct(t)
+	//pg17.TestSendAMarshalledStruct(t)
 }
 
 func TestSendInvalidJSONFails(t *testing.T) {
 	pg16.TestSendInvalidJSONFails(t)
+	pg17.TestSendInvalidJSONFails(t)
 }
 
 func TestSendBatch(t *testing.T) {
 	pg16.TestSendBatch(t)
+	pg17.TestSendBatch(t)
 }
 
 func TestRead(t *testing.T) {
 	pg16.TestRead(t)
+	//pg17.TestRead(t)
 }
 
 func TestReadEmptyQueueReturnsNoRows(t *testing.T) {
 	pg16.TestReadEmptyQueueReturnsNoRows(t)
+	pg17.TestReadEmptyQueueReturnsNoRows(t)
 }
 
 func TestReadBatch(t *testing.T) {
 	pg16.TestReadBatch(t)
+	//pg17.TestReadBatch(t)
 }
 
 func TestPop(t *testing.T) {
 	pg16.TestPop(t)
+	//pg17.TestPop(t)
 }
 
 func TestPopEmptyQueueReturnsNoRows(t *testing.T) {
 	pg16.TestPopEmptyQueueReturnsNoRows(t)
+	pg17.TestPopEmptyQueueReturnsNoRows(t)
 }
 
 func TestArchive(t *testing.T) {
 	pg16.TestArchive(t)
+	pg17.TestArchive(t)
 }
 
 func TestArchiveNotExist(t *testing.T) {
 	pg16.TestArchiveNotExist(t)
+	pg17.TestArchiveNotExist(t)
 }
 
 func TestArchiveBatch(t *testing.T) {
 	pg16.TestArchiveBatch(t)
+	pg17.TestArchiveBatch(t)
 }
 
 func TestDelete(t *testing.T) {
 	pg16.TestDelete(t)
+	pg17.TestDelete(t)
 }
 
 func TestDeleteNotExist(t *testing.T) {
 	pg16.TestDeleteNotExist(t)
+	pg17.TestDeleteNotExist(t)
 }
 
 func TestDeleteBatch(t *testing.T) {
 	pg16.TestDeleteBatch(t)
+	pg17.TestDeleteBatch(t)
 }
 
 func TestErrorCases(t *testing.T) {

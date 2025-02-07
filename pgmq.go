@@ -128,7 +128,7 @@ func (p *PGMQ) Send(ctx context.Context, queue string, msg json.RawMessage) (int
 func (p *PGMQ) SendWithDelay(ctx context.Context, queue string, msg json.RawMessage, delay int) (int64, error) {
 	var msgID int64
 	err := p.db.
-		QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3)", queue, msg, delay).
+		QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3::int)", queue, msg, delay).
 		Scan(&msgID)
 	if err != nil {
 		return 0, wrapPostgresError(err)
@@ -147,7 +147,7 @@ func (p *PGMQ) SendBatch(ctx context.Context, queue string, msgs []json.RawMessa
 // delay is specified in seconds. The message ids, unique to the queue, are
 // returned.
 func (p *PGMQ) SendBatchWithDelay(ctx context.Context, queue string, msgs []json.RawMessage, delay int) ([]int64, error) {
-	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3)", queue, msgs, delay)
+	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3::int)", queue, msgs, delay)
 	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
