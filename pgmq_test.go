@@ -4,374 +4,119 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"testing"
-	"time"
 
-	"github.com/avast/retry-go/v4"
 	"github.com/craigpastro/pgmq-go/mocks"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 	"go.uber.org/mock/gomock"
 )
 
-var q *PGMQ
-
 var (
+	pg16 = Database{
+		image: "quay.io/tembo/pgmq-pg:latest",
+	}
+	pg17 = Database{
+		image: "tembo.docker.scarf.sh/tembo/pg17-pgmq:latest",
+	}
 	testMsg1 = json.RawMessage(`{"foo": "bar1"}`)
-	testMsg2 = json.RawMessage(`{"foo": "bar2"}`)
+	testMsg2 = json.RawMessage(`{"foo": "bar1"}`)
 )
 
+func (d *Database) Close() {
+	d.q.Close()
+	_ = d.container.Terminate(context.Background())
+}
+
 func TestMain(m *testing.M) {
-	ctx := context.Background()
-
-	req := testcontainers.ContainerRequest{
-		Image:        "quay.io/tembo/pgmq-pg:latest",
-		ExposedPorts: []string{"5432/tcp"},
-		Env:          map[string]string{"POSTGRES_USER": "postgres", "POSTGRES_PASSWORD": "password"},
-		WaitingFor:   wait.ForLog("database system is ready to accept connections"),
-	}
-
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	host, err := container.Host(ctx)
-	if err != nil {
-		panic(err)
-	}
-
-	port, err := container.MappedPort(ctx, "5432/tcp")
-	if err != nil {
-		panic(err)
-	}
-
-	connString := fmt.Sprintf("postgres://postgres:password@%s:%s/postgres", host, port.Port())
-
-	q, err = retry.DoWithData(func() (*PGMQ, error) {
-		return New(ctx, connString)
-	})
-	if err != nil {
-		panic(err)
-	}
-
+	pg16.Init()
+	pg17.Init()
 	code := m.Run()
-
-	q.Close()
-	_ = container.Terminate(context.Background())
-
+	pg16.Close()
+	pg17.Close()
 	os.Exit(code)
 }
 
 func TestPing(t *testing.T) {
-	err := q.Ping(context.Background())
-	require.NoError(t, err)
+	pg16.TestPing(t)
+	pg17.TestPing(t)
 }
 
 func TestCreateAndDropQueue(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	err = q.DropQueue(ctx, queue)
-	require.NoError(t, err)
-
-	_, err = q.Send(ctx, queue, testMsg1)
-	require.Error(t, err)
+	pg16.TestCreateAndDropQueue(t)
+	pg17.TestCreateAndDropQueue(t)
 }
 
 func TestDropQueueWhichDoesNotExist(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.DropQueue(ctx, queue)
-	require.Error(t, err)
+	pg16.TestDropQueueWhichDoesNotExist(t)
+	pg17.TestDropQueueWhichDoesNotExist(t)
 }
 
 func TestCreateUnloggedAndDropQueue(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateUnloggedQueue(ctx, queue)
-	require.NoError(t, err)
-
-	_, err = q.Send(ctx, queue, testMsg1)
-	require.NoError(t, err)
-
-	err = q.DropQueue(ctx, queue)
-	require.NoError(t, err)
-
-	_, err = q.Send(ctx, queue, testMsg1)
-	require.Error(t, err)
+	pg16.TestCreateUnloggedAndDropQueue(t)
+	pg17.TestCreateUnloggedAndDropQueue(t)
 }
 
 func TestSend(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	id, err := q.Send(ctx, queue, testMsg1)
-	require.NoError(t, err)
-	require.EqualValues(t, 1, id)
-
-	id, err = q.Send(ctx, queue, testMsg2)
-	require.NoError(t, err)
-	require.EqualValues(t, 2, id)
+	pg16.TestSend(t)
+	pg17.TestSend(t)
 }
 
 func TestSendAMarshalledStruct(t *testing.T) {
-	type A struct {
-		Val int `json:"val"`
-	}
-
-	a := A{3}
-	b, err := json.Marshal(a)
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	queue := t.Name()
-
-	err = q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	_, err = q.Send(ctx, queue, b)
-	require.NoError(t, err)
-
-	msg, err := q.Read(ctx, queue, 0)
-	require.NoError(t, err)
-
-	var aa A
-	err = json.Unmarshal(msg.Message, &aa)
-	require.NoError(t, err)
-
-	require.EqualValues(t, a, aa)
+	pg16.TestSendAMarshalledStruct(t)
 }
 
 func TestSendInvalidJSONFails(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	_, err = q.Send(ctx, queue, json.RawMessage(`{"foo":}`))
-	require.Error(t, err)
+	pg16.TestSendInvalidJSONFails(t)
 }
 
 func TestSendBatch(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	ids, err := q.SendBatch(ctx, queue, []json.RawMessage{testMsg1, testMsg2})
-	require.NoError(t, err)
-	require.Equal(t, []int64{1, 2}, ids)
+	pg16.TestSendBatch(t)
 }
 
 func TestRead(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	id, err := q.Send(ctx, queue, testMsg1)
-	require.NoError(t, err)
-
-	msg, err := q.Read(ctx, queue, 0)
-	require.NoError(t, err)
-	require.Equal(t, testMsg1, msg.Message)
-	require.Equal(t, id, msg.MsgID)
-
-	// Visibility timeout will still be in effect.
-	_, err = q.Read(ctx, queue, 0)
-	require.ErrorIs(t, err, ErrNoRows)
+	pg16.TestRead(t)
 }
 
 func TestReadEmptyQueueReturnsNoRows(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	_, err = q.Read(ctx, queue, 0)
-	require.ErrorIs(t, err, ErrNoRows)
+	pg16.TestReadEmptyQueueReturnsNoRows(t)
 }
 
 func TestReadBatch(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	_, err = q.SendBatch(ctx, queue, []json.RawMessage{testMsg1, testMsg2})
-	require.NoError(t, err)
-
-	time.Sleep(time.Second)
-	msgs, err := q.ReadBatch(ctx, queue, 0, 5)
-	require.NoError(t, err)
-	require.Len(t, msgs, 2)
-
-	require.Equal(t, testMsg1, msgs[0].Message)
-	require.Equal(t, testMsg2, msgs[1].Message)
-
-	// Visibility timeout will still be in effect.
-	msgs, err = q.ReadBatch(ctx, queue, 0, 5)
-	require.NoError(t, err)
-	require.Empty(t, msgs)
+	pg16.TestReadBatch(t)
 }
 
 func TestPop(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	id, err := q.Send(ctx, queue, testMsg1)
-	require.NoError(t, err)
-
-	msg, err := q.Pop(ctx, queue)
-	require.NoError(t, err)
-	require.Equal(t, testMsg1, msg.Message)
-	require.Equal(t, id, msg.MsgID)
-
-	_, err = q.Read(ctx, queue, 0)
-	require.ErrorIs(t, err, ErrNoRows)
+	pg16.TestPop(t)
 }
 
 func TestPopEmptyQueueReturnsNoRows(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	_, err = q.Pop(ctx, queue)
-	require.ErrorIs(t, err, ErrNoRows)
+	pg16.TestPopEmptyQueueReturnsNoRows(t)
 }
 
 func TestArchive(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	id, err := q.Send(ctx, queue, testMsg1)
-	require.NoError(t, err)
-
-	archived, err := q.Archive(ctx, queue, id)
-	require.NoError(t, err)
-	require.True(t, archived)
-
-	// Let's just check that something landed in the archive table.
-	stmt := fmt.Sprintf("SELECT * FROM pgmq.a_%s", queue)
-	tag, err := q.db.Exec(ctx, stmt)
-	require.NoError(t, err)
-	require.EqualValues(t, 1, tag.RowsAffected())
-
-	_, err = q.Read(ctx, queue, 0)
-	require.ErrorIs(t, err, ErrNoRows)
+	pg16.TestArchive(t)
 }
 
 func TestArchiveNotExist(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	archived, err := q.Archive(ctx, queue, 100)
-	require.NoError(t, err)
-	require.False(t, archived)
+	pg16.TestArchiveNotExist(t)
 }
 
 func TestArchiveBatch(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	ids, err := q.SendBatch(ctx, queue, []json.RawMessage{testMsg1, testMsg2})
-	require.NoError(t, err)
-
-	archived, err := q.ArchiveBatch(ctx, queue, ids)
-	require.NoError(t, err)
-	require.Equal(t, ids, archived)
-
-	// Let's check that the two messages landed in the archive table.
-	stmt := fmt.Sprintf("SELECT * FROM pgmq.a_%s", queue)
-	tag, err := q.db.Exec(ctx, stmt)
-	require.NoError(t, err)
-	require.EqualValues(t, 2, tag.RowsAffected())
-
-	_, err = q.Read(ctx, queue, 0)
-	require.ErrorIs(t, err, ErrNoRows)
+	pg16.TestArchiveBatch(t)
 }
 
 func TestDelete(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	id, err := q.Send(ctx, queue, testMsg1)
-	require.NoError(t, err)
-
-	deleted, err := q.Delete(ctx, queue, id)
-	require.NoError(t, err)
-	require.True(t, deleted)
-
-	_, err = q.Read(ctx, queue, 0)
-	require.ErrorIs(t, err, ErrNoRows)
+	pg16.TestDelete(t)
 }
 
 func TestDeleteNotExist(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	deleted, err := q.Delete(ctx, queue, 100)
-	require.NoError(t, err)
-	require.False(t, deleted)
+	pg16.TestDeleteNotExist(t)
 }
 
 func TestDeleteBatch(t *testing.T) {
-	ctx := context.Background()
-	queue := t.Name()
-
-	err := q.CreateQueue(ctx, queue)
-	require.NoError(t, err)
-
-	ids, err := q.SendBatch(ctx, queue, []json.RawMessage{testMsg1, testMsg2})
-	require.NoError(t, err)
-
-	deleted, err := q.DeleteBatch(ctx, queue, ids)
-	require.NoError(t, err)
-	require.EqualValues(t, ids, deleted)
-
-	_, err = q.Read(ctx, queue, 0)
-	require.ErrorIs(t, err, ErrNoRows)
+	pg16.TestDeleteBatch(t)
 }
 
 func TestErrorCases(t *testing.T) {
