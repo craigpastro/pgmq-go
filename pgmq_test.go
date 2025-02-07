@@ -63,6 +63,11 @@ func TestSend(t *testing.T) {
 	pg17.TestSend(t)
 }
 
+func TestSendTimestamp(t *testing.T) {
+	//pg16.TestSendWithDelayTimestamp(t) delay with timestamp is not supported in pg16
+	pg17.TestSendWithDelayTimestamp(t)
+}
+
 func TestSendAMarshalledStruct(t *testing.T) {
 	pg16.TestSendAMarshalledStruct(t)
 	//pg17.TestSendAMarshalledStruct(t)
@@ -76,6 +81,11 @@ func TestSendInvalidJSONFails(t *testing.T) {
 func TestSendBatch(t *testing.T) {
 	pg16.TestSendBatch(t)
 	pg17.TestSendBatch(t)
+}
+
+func TestSendBatchWithDelayTimestamp(t *testing.T) {
+	//pg16.TestSendBatchWithDelayTimestamp(t) delay with timestamp is not supported in pg16
+	pg17.TestSendBatchWithDelayTimestamp(t)
 }
 
 func TestRead(t *testing.T) {

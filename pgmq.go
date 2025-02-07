@@ -137,6 +137,21 @@ func (p *PGMQ) SendWithDelay(ctx context.Context, queue string, msg json.RawMess
 	return msgID, nil
 }
 
+// SendWithDelayTimestamp sends a single message to a queue with a delay. The
+// delay is specified as a timestamp. The message id, unique to the queue, is
+// returned. Only supported in pgmq-pg17 and above.
+func (p *PGMQ) SendWithDelayTimestamp(ctx context.Context, queue string, msg json.RawMessage, delay time.Time) (int64, error) {
+	var msgID int64
+	err := p.db.
+		QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3::timestamptz)", queue, msg, delay).
+		Scan(&msgID)
+	if err != nil {
+		return 0, wrapPostgresError(err)
+	}
+
+	return msgID, nil
+}
+
 // SendBatch sends a batch of messages to a queue. The message ids, unique to
 // the queue, are returned.
 func (p *PGMQ) SendBatch(ctx context.Context, queue string, msgs []json.RawMessage) ([]int64, error) {
@@ -145,9 +160,32 @@ func (p *PGMQ) SendBatch(ctx context.Context, queue string, msgs []json.RawMessa
 
 // SendBatchWithDelay sends a batch of messages to a queue with a delay. The
 // delay is specified in seconds. The message ids, unique to the queue, are
-// returned.
+// returned. Only supported in pgmq-pg17 and above.
 func (p *PGMQ) SendBatchWithDelay(ctx context.Context, queue string, msgs []json.RawMessage, delay int) ([]int64, error) {
 	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3::int)", queue, msgs, delay)
+	if err != nil {
+		return nil, wrapPostgresError(err)
+	}
+	defer rows.Close()
+
+	var msgIDs []int64
+	for rows.Next() {
+		var msgID int64
+		err = rows.Scan(&msgID)
+		if err != nil {
+			return nil, wrapPostgresError(err)
+		}
+		msgIDs = append(msgIDs, msgID)
+	}
+
+	return msgIDs, nil
+}
+
+// SendBatchWithDelayTimestamp sends a batch of messages to a queue with a
+// delay. The delay is specified as a timestamp. The message ids, unique to
+// the queue, are returned.
+func (p *PGMQ) SendBatchWithDelayTimestamp(ctx context.Context, queue string, msgs []json.RawMessage, delay time.Time) ([]int64, error) {
+	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3::timestamptz)", queue, msgs, delay)
 	if err != nil {
 		return nil, wrapPostgresError(err)
 	}

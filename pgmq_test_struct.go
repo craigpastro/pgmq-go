@@ -68,6 +68,18 @@ func (d *Database) TestSend(t *testing.T) {
 	require.EqualValues(t, 2, id)
 }
 
+func (d *Database) TestSendWithDelayTimestamp(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := d.q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	id, err := d.q.SendWithDelayTimestamp(ctx, queue, testMsg1, time.Now().Add(time.Second))
+	require.NoError(t, err)
+	require.EqualValues(t, 1, id)
+}
+
 func (d *Database) TestPing(t *testing.T) {
 	err := d.q.Ping(context.Background())
 	require.NoError(t, err)
@@ -150,6 +162,18 @@ func (d *Database) TestSendBatch(t *testing.T) {
 	require.NoError(t, err)
 
 	ids, err := d.q.SendBatch(ctx, queue, []json.RawMessage{testMsg1, testMsg2})
+	require.NoError(t, err)
+	require.Equal(t, []int64{1, 2}, ids)
+}
+
+func (d *Database) TestSendBatchWithDelayTimestamp(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := d.q.CreateQueue(ctx, queue)
+	require.NoError(t, err)
+
+	ids, err := d.q.SendBatchWithDelayTimestamp(ctx, queue, []json.RawMessage{testMsg1, testMsg2}, time.Now().Add(time.Second))
 	require.NoError(t, err)
 	require.Equal(t, []int64{1, 2}, ids)
 }
