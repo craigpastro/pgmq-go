@@ -70,7 +70,7 @@ func TestSendTimestamp(t *testing.T) {
 
 func TestSendAMarshalledStruct(t *testing.T) {
 	pg16.TestSendAMarshalledStruct(t)
-	//pg17.TestSendAMarshalledStruct(t)
+	pg17.TestSendAMarshalledStruct(t)
 }
 
 func TestSendInvalidJSONFails(t *testing.T) {
@@ -90,7 +90,7 @@ func TestSendBatchWithDelayTimestamp(t *testing.T) {
 
 func TestRead(t *testing.T) {
 	pg16.TestRead(t)
-	//pg17.TestRead(t)
+	pg17.TestRead(t)
 }
 
 func TestReadEmptyQueueReturnsNoRows(t *testing.T) {
@@ -100,12 +100,12 @@ func TestReadEmptyQueueReturnsNoRows(t *testing.T) {
 
 func TestReadBatch(t *testing.T) {
 	pg16.TestReadBatch(t)
-	//pg17.TestReadBatch(t)
+	pg17.TestReadBatch(t)
 }
 
 func TestPop(t *testing.T) {
 	pg16.TestPop(t)
-	//pg17.TestPop(t)
+	pg17.TestPop(t)
 }
 
 func TestPopEmptyQueueReturnsNoRows(t *testing.T) {

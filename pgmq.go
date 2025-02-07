@@ -24,6 +24,7 @@ type Message struct {
 	// be available for reading again.
 	VT      time.Time
 	Message json.RawMessage
+	Headers json.RawMessage // Only supported in pgmq-pg17 and above
 }
 
 type DB interface {
@@ -214,13 +215,24 @@ func (p *PGMQ) Read(ctx context.Context, queue string, vt int64) (*Message, erro
 	}
 
 	var msg Message
-	err := p.db.
-		QueryRow(ctx, "SELECT * FROM pgmq.read($1, $2, $3)", queue, vt, 1).
-		Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.read($1, $2, $3)", queue, vt, 1)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNoRows
-		}
+		return nil, wrapPostgresError(err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return nil, ErrNoRows
+	}
+
+	fields := rows.FieldDescriptions()
+	if len(fields) == 5 {
+		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+	} else {
+		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message, &msg.Headers)
+	}
+
+	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
 
@@ -243,9 +255,16 @@ func (p *PGMQ) ReadBatch(ctx context.Context, queue string, vt int64, numMsgs in
 	defer rows.Close()
 
 	var msgs []*Message
+	fields := rows.FieldDescriptions()
+	hasHeaders := len(fields) > 5
+
 	for rows.Next() {
 		var msg Message
-		err := rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+		if hasHeaders {
+			err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message, &msg.Headers)
+		} else {
+			err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+		}
 		if err != nil {
 			return nil, wrapPostgresError(err)
 		}
@@ -261,13 +280,24 @@ func (p *PGMQ) ReadBatch(ctx context.Context, queue string, vt int64, numMsgs in
 // This is because the message is immediately deleted.
 func (p *PGMQ) Pop(ctx context.Context, queue string) (*Message, error) {
 	var msg Message
-	err := p.db.
-		QueryRow(ctx, "SELECT * FROM pgmq.pop($1)", queue).
-		Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.pop($1)", queue)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNoRows
-		}
+		return nil, wrapPostgresError(err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return nil, ErrNoRows
+	}
+
+	fields := rows.FieldDescriptions()
+	if len(fields) == 5 {
+		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+	} else {
+		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message, &msg.Headers)
+	}
+
+	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
 
