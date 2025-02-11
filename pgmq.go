@@ -24,6 +24,7 @@ type Message struct {
 	// be available for reading again.
 	VT      time.Time
 	Message json.RawMessage
+	Headers json.RawMessage // Only supported in pgmq-pg17 and above
 }
 
 type DB interface {
@@ -128,7 +129,22 @@ func (p *PGMQ) Send(ctx context.Context, queue string, msg json.RawMessage) (int
 func (p *PGMQ) SendWithDelay(ctx context.Context, queue string, msg json.RawMessage, delay int) (int64, error) {
 	var msgID int64
 	err := p.db.
-		QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3)", queue, msg, delay).
+		QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3::int)", queue, msg, delay).
+		Scan(&msgID)
+	if err != nil {
+		return 0, wrapPostgresError(err)
+	}
+
+	return msgID, nil
+}
+
+// SendWithDelayTimestamp sends a single message to a queue with a delay. The
+// delay is specified as a timestamp. The message id, unique to the queue, is
+// returned. Only supported in pgmq-pg17 and above.
+func (p *PGMQ) SendWithDelayTimestamp(ctx context.Context, queue string, msg json.RawMessage, delay time.Time) (int64, error) {
+	var msgID int64
+	err := p.db.
+		QueryRow(ctx, "SELECT * FROM pgmq.send($1, $2, $3::timestamptz)", queue, msg, delay).
 		Scan(&msgID)
 	if err != nil {
 		return 0, wrapPostgresError(err)
@@ -145,9 +161,32 @@ func (p *PGMQ) SendBatch(ctx context.Context, queue string, msgs []json.RawMessa
 
 // SendBatchWithDelay sends a batch of messages to a queue with a delay. The
 // delay is specified in seconds. The message ids, unique to the queue, are
-// returned.
+// returned. Only supported in pgmq-pg17 and above.
 func (p *PGMQ) SendBatchWithDelay(ctx context.Context, queue string, msgs []json.RawMessage, delay int) ([]int64, error) {
-	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3)", queue, msgs, delay)
+	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3::int)", queue, msgs, delay)
+	if err != nil {
+		return nil, wrapPostgresError(err)
+	}
+	defer rows.Close()
+
+	var msgIDs []int64
+	for rows.Next() {
+		var msgID int64
+		err = rows.Scan(&msgID)
+		if err != nil {
+			return nil, wrapPostgresError(err)
+		}
+		msgIDs = append(msgIDs, msgID)
+	}
+
+	return msgIDs, nil
+}
+
+// SendBatchWithDelayTimestamp sends a batch of messages to a queue with a
+// delay. The delay is specified as a timestamp. The message ids, unique to
+// the queue, are returned.
+func (p *PGMQ) SendBatchWithDelayTimestamp(ctx context.Context, queue string, msgs []json.RawMessage, delay time.Time) ([]int64, error) {
+	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3::timestamptz)", queue, msgs, delay)
 	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
@@ -176,13 +215,24 @@ func (p *PGMQ) Read(ctx context.Context, queue string, vt int64) (*Message, erro
 	}
 
 	var msg Message
-	err := p.db.
-		QueryRow(ctx, "SELECT * FROM pgmq.read($1, $2, $3)", queue, vt, 1).
-		Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.read($1, $2, $3)", queue, vt, 1)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNoRows
-		}
+		return nil, wrapPostgresError(err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return nil, ErrNoRows
+	}
+
+	fields := rows.FieldDescriptions()
+	if len(fields) == 5 {
+		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+	} else {
+		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message, &msg.Headers)
+	}
+
+	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
 
@@ -205,9 +255,16 @@ func (p *PGMQ) ReadBatch(ctx context.Context, queue string, vt int64, numMsgs in
 	defer rows.Close()
 
 	var msgs []*Message
+	fields := rows.FieldDescriptions()
+	hasHeaders := len(fields) > 5
+
 	for rows.Next() {
 		var msg Message
-		err := rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+		if hasHeaders {
+			err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message, &msg.Headers)
+		} else {
+			err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+		}
 		if err != nil {
 			return nil, wrapPostgresError(err)
 		}
@@ -223,13 +280,24 @@ func (p *PGMQ) ReadBatch(ctx context.Context, queue string, vt int64, numMsgs in
 // This is because the message is immediately deleted.
 func (p *PGMQ) Pop(ctx context.Context, queue string) (*Message, error) {
 	var msg Message
-	err := p.db.
-		QueryRow(ctx, "SELECT * FROM pgmq.pop($1)", queue).
-		Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.pop($1)", queue)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNoRows
-		}
+		return nil, wrapPostgresError(err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return nil, ErrNoRows
+	}
+
+	fields := rows.FieldDescriptions()
+	if len(fields) == 5 {
+		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+	} else {
+		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message, &msg.Headers)
+	}
+
+	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
 
