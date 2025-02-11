@@ -65,3 +65,7 @@ func main() {
 ## Contributions
 
 We :heart: contributions.
+
+## See also
+
+- [joeychilson/pgmq](https://github.com/joeychilson/pgmq)
