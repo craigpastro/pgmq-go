@@ -161,7 +161,7 @@ func (p *PGMQ) SendBatch(ctx context.Context, queue string, msgs []json.RawMessa
 
 // SendBatchWithDelay sends a batch of messages to a queue with a delay. The
 // delay is specified in seconds. The message ids, unique to the queue, are
-// returned. Only supported in pgmq-pg17 and above.
+// returned.
 func (p *PGMQ) SendBatchWithDelay(ctx context.Context, queue string, msgs []json.RawMessage, delay int) ([]int64, error) {
 	rows, err := p.db.Query(ctx, "SELECT * FROM pgmq.send_batch($1, $2::jsonb[], $3::int)", queue, msgs, delay)
 	if err != nil {
