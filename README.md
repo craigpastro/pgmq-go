@@ -9,6 +9,8 @@ A Go (Golang) client for
 [Postgres Message Queue](https://github.com/tembo-io/pgmq) (PGMQ). Based loosely
 on the [Rust client](https://github.com/tembo-io/pgmq/tree/main/pgmq-rs).
 
+`pgmq-go` works with [pgx](https://github.com/jackc/pgx). The second argument of most functions only needs to satisfy the [DB](https://pkg.go.dev/github.com/craigpastro/pgmq-go#DB) interface, which means it can take, among others, a `*pgx.Conn`, `*pgxpool.Pool`, or `pgx.Tx`.
+
 ## Usage
 
 Start a Postgres instance with the PGMQ extension installed:
@@ -32,22 +34,33 @@ import (
 func main() {
     ctx := context.Background()
 
-    q, err := pgmq.New(ctx, "postgres://postgres:password@localhost:5432/postgres")
+    pool, err := pgmq.NewPgxPool(ctx, "postgres://postgres:password@localhost:5432/postgres")
     if err != nil {
         panic(err)
     }
 
-    err = q.CreateQueue(ctx, "my_queue")
+    err = pgmq.CreatePGMQExtension(ctx, pool)
     if err != nil {
         panic(err)
     }
 
-    id, err := q.Send(ctx, "my_queue", json.RawMessage(`{"foo": "bar"}`))
+    err = pgmq.CreateQueue(ctx, pool, "my_queue")
     if err != nil {
         panic(err)
     }
 
-    msg, err := q.Read(ctx, "my_queue", 30)
+    // We can perform various queue operations using a transaction.
+    tx, err := pool.Begin(ctx)
+    if err != nil {
+        panic(err)
+    }
+
+    id, err := pgmq.Send(ctx, tx, "my_queue", json.RawMessage(`{"foo": "bar"}`))
+    if err != nil {
+        panic(err)
+    }
+
+    msg, err := pgmq.Read(ctx, tx, "my_queue", 30)
     if err != nil {
         panic(err)
     }
@@ -55,10 +68,19 @@ func main() {
     // Archive the message by moving it to the "pgmq.a_<queue_name>" table.
     // Alternatively, you can `Delete` the message, or read and delete in one
     // call by using `Pop`.
-    _, err = q.Archive(ctx, "my_queue", id)
+    _, err = pgmq.Archive(ctx, tx, "my_queue", id)
     if err != nil {
         panic(err)
     }
+
+    // Commit the transaction.
+    err = tx.Commit(ctx)
+    if err != nil {
+        panic(err)
+    }
+
+    // Close the connection pool.
+    pool.Close()
 }
 ```
 
