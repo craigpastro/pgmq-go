@@ -141,6 +141,11 @@ func TestDeleteBatch(t *testing.T) {
 	pg17.TestDeleteBatch(t)
 }
 
+func TestSetVisibilityTimeout(t *testing.T) {
+	pg16.TestSetVisibilityTimeout(t)
+	pg17.TestSetVisibilityTimeout(t)
+}
+
 func TestErrorCases(t *testing.T) {
 	ctx := context.Background()
 

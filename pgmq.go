@@ -350,6 +350,34 @@ func DeleteBatch(ctx context.Context, db DB, queue string, msgIDs []int64) ([]in
 	return deleted, nil
 }
 
+// SetVisibilityTimeout sets the visibility timeout of a message to a specified time duration in the future.
+// Returns the record of the message that was updated.
+func SetVisibilityTimeout(ctx context.Context, db DB, queue string, msgID int64, vt int64) (*Message, error) {
+	var msg Message
+
+	rows, err := db.Query(ctx, "SELECT * FROM pgmq.set_vt($1, $2::bigint, $3::int)", queue, msgID, vt)
+	if err != nil {
+		return nil, wrapPostgresError(err)
+	}
+
+	if !rows.Next() {
+		return nil, ErrNoRows
+	}
+
+	fields := rows.FieldDescriptions()
+	if len(fields) == 5 {
+		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+	} else {
+		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message, &msg.Headers)
+	}
+
+	if err != nil {
+		return nil, wrapPostgresError(err)
+	}
+
+	return &msg, nil
+}
+
 func wrapPostgresError(err error) error {
 	return fmt.Errorf("postgres error: %w", err)
 }

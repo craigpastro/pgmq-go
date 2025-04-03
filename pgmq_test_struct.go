@@ -386,3 +386,28 @@ func (d *Database) TestDeleteBatch(t *testing.T) {
 	_, err = Read(ctx, d.Pool, queue, 0)
 	require.ErrorIs(t, err, ErrNoRows)
 }
+
+func (d *Database) TestSetVisibilityTimeout(t *testing.T) {
+	ctx := context.Background()
+	queue := t.Name()
+
+	err := CreateQueue(ctx, d.Pool, queue)
+	require.NoError(t, err)
+
+	id, err := Send(ctx, d.Pool, queue, testMsg1)
+	require.NoError(t, err)
+
+	_, err = Read(ctx, d.Pool, queue, 0)
+	require.NoError(t, err)
+
+	// msg is in visibility timeout, nothing is returned
+	_, err = Read(ctx, d.Pool, queue, 0)
+	require.ErrorIs(t, err, ErrNoRows)
+
+	// changing visibility timeout to 0, make it available immediately
+	_, err = SetVisibilityTimeout(ctx, d.Pool, queue, id, 0)
+	require.NoError(t, err)
+
+	_, err = Read(ctx, d.Pool, queue, 0)
+	require.NoError(t, err)
+}
