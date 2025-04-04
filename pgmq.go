@@ -84,9 +84,13 @@ func CreateUnloggedQueue(ctx context.Context, db DB, queue string) error {
 // DropQueue deletes the given queue. It deletes the queue's tables, indices,
 // and metadata. It will return an error if the queue does not exist.
 func DropQueue(ctx context.Context, db DB, queue string) error {
-	_, err := db.Exec(ctx, "SELECT pgmq.drop_queue($1)", queue)
+	var exists bool
+	err := db.QueryRow(ctx, "SELECT pgmq.drop_queue($1)", queue).Scan(&exists)
 	if err != nil {
 		return wrapPostgresError(err)
+	}
+	if !exists {
+		return fmt.Errorf("queue %s does not exist", queue)
 	}
 
 	return nil
