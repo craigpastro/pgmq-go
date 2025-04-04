@@ -22,11 +22,6 @@ var (
 	}
 )
 
-func (d *Database) Close() {
-	d.Pool.Close()
-	_ = d.container.Terminate(context.Background())
-}
-
 func TestMain(m *testing.M) {
 	pg16.Init()
 	pg17.Init()
@@ -168,7 +163,8 @@ func TestErrorCases(t *testing.T) {
 	})
 
 	t.Run("dropQueueError", func(t *testing.T) {
-		mockDB.EXPECT().Exec(ctx, "SELECT pgmq.drop_queue($1)", queue).Return(cmdTag, testErr)
+		mockDB.EXPECT().QueryRow(ctx, "SELECT pgmq.drop_queue($1)", queue).Return(mockRow)
+		mockRow.EXPECT().Scan(gomock.Any()).Return(testErr)
 		err := DropQueue(ctx, mockDB, queue)
 		require.ErrorContains(t, err, "postgres error")
 	})
