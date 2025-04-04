@@ -68,6 +68,11 @@ func (d *Database) Init() {
 	}
 }
 
+func (d *Database) Close() {
+	d.Pool.Close()
+	_ = d.container.Terminate(context.Background())
+}
+
 func (d *Database) TestSend(t *testing.T) {
 	ctx := context.Background()
 	queue := t.Name()
