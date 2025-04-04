@@ -22,8 +22,6 @@ var (
 	}
 )
 
-
-
 func TestMain(m *testing.M) {
 	pg16.Init()
 	pg17.Init()
