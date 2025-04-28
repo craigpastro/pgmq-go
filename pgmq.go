@@ -363,6 +363,7 @@ func SetVisibilityTimeout(ctx context.Context, db DB, queue string, msgID int64,
 	if err != nil {
 		return nil, wrapPostgresError(err)
 	}
+	defer rows.Close()
 
 	if !rows.Next() {
 		return nil, ErrNoRows
