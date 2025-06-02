@@ -6,7 +6,7 @@ toolchain go1.24.2
 
 require (
 	github.com/avast/retry-go/v4 v4.6.1
-	github.com/jackc/pgx/v5 v5.7.4
+	github.com/jackc/pgx/v5 v5.7.5
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.37.0
 	go.uber.org/mock v0.5.0
