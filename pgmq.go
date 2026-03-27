@@ -20,6 +20,7 @@ type Message struct {
 	MsgID      int64
 	ReadCount  int64
 	EnqueuedAt time.Time
+	LastReadAt time.Time
 	// VT is "visibility time". The UTC timestamp at which the message will
 	// be available for reading again.
 	VT      time.Time
@@ -206,8 +207,10 @@ func Read(ctx context.Context, db DB, queue string, vt int64) (*Message, error) 
 	fields := rows.FieldDescriptions()
 	if len(fields) == 5 {
 		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
-	} else {
+	} else if len(fields) == 6 {
 		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message, &msg.Headers)
+	} else {
+		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.LastReadAt, &msg.VT, &msg.Message, &msg.Headers)
 	}
 
 	if err != nil {
@@ -234,15 +237,18 @@ func ReadBatch(ctx context.Context, db DB, queue string, vt int64, numMsgs int64
 
 	var msgs []*Message
 	fields := rows.FieldDescriptions()
-	hasHeaders := len(fields) > 5
 
 	for rows.Next() {
 		var msg Message
-		if hasHeaders {
+
+		if len(fields) == 5 {
+			err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+		} else if len(fields) == 6 {
 			err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message, &msg.Headers)
 		} else {
-			err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
+			err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.LastReadAt, &msg.VT, &msg.Message, &msg.Headers)
 		}
+
 		if err != nil {
 			return nil, wrapPostgresError(err)
 		}
@@ -271,8 +277,10 @@ func Pop(ctx context.Context, db DB, queue string) (*Message, error) {
 	fields := rows.FieldDescriptions()
 	if len(fields) == 5 {
 		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
-	} else {
+	} else if len(fields) == 6 {
 		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message, &msg.Headers)
+	} else {
+		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.LastReadAt, &msg.VT, &msg.Message, &msg.Headers)
 	}
 
 	if err != nil {
@@ -372,8 +380,10 @@ func SetVisibilityTimeout(ctx context.Context, db DB, queue string, msgID int64,
 	fields := rows.FieldDescriptions()
 	if len(fields) == 5 {
 		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message)
-	} else {
+	} else if len(fields) == 6 {
 		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.VT, &msg.Message, &msg.Headers)
+	} else {
+		err = rows.Scan(&msg.MsgID, &msg.ReadCount, &msg.EnqueuedAt, &msg.LastReadAt, &msg.VT, &msg.Message, &msg.Headers)
 	}
 
 	if err != nil {
