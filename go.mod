@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/avast/retry-go/v4 v4.7.0
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.10.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.42.0
 	go.uber.org/mock v0.5.0
